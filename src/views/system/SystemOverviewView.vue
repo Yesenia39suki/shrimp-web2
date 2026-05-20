@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
 
 import { useShrimpSystemStore } from '@/stores/shrimpSystem'
 
@@ -105,13 +104,6 @@ const rightStats = computed(() => [
   },
 ])
 
-const systemLinks = [
-  { label: '水质总览', to: '/system/water' },
-  { label: '虾群总览', to: '/system/shrimp' },
-  { label: '机器人监测', to: '/system/robot' },
-  { label: '配置中心', to: '/system/config' },
-]
-
 const waterStatusRows = computed(() =>
   store.waterMetrics.slice(0, 5).map((metric) => {
     const threshold = store.thresholds.water[metric.key]
@@ -213,7 +205,26 @@ const stageTrendPanels = computed(() => [
     series: store.waterMetrics.find((metric) => metric.key === 'oxygen')?.trend ?? [],
     color: '#71e5aa',
   },
+  {
+    title: 'pH 波动',
+    value: String(phValue.value),
+    series: store.waterMetrics.find((metric) => metric.key === 'ph')?.trend ?? [],
+    color: '#ffbf6b',
+  },
 ])
+
+const waterQuickRows = computed(() =>
+  store.waterMetrics.slice(0, 4).map((metric) => {
+    const alert = store.waterAlerts.find((item) => item.metricKey === metric.key)
+    return {
+      key: metric.key,
+      label: metric.label,
+      value: `${metric.value}${metric.unit}`,
+      status: alert ? alert.level : '正常',
+      warning: Boolean(alert),
+    }
+  }),
+)
 
 const stageInfoRows = computed(() => [
   { label: '虾种', value: selectedSpecies.value },
@@ -355,6 +366,17 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
               />
             </svg>
           </div>
+          <div class="water-mini-grid">
+            <article
+              v-for="row in waterQuickRows"
+              :key="row.key"
+              :class="{ warning: row.warning }"
+            >
+              <span>{{ row.label }}</span>
+              <strong>{{ row.value }}</strong>
+              <em>{{ row.status }}</em>
+            </article>
+          </div>
         </section>
 
         <section class="floating-panel panel-center-top">
@@ -420,7 +442,24 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
           <div class="device-meta">
             <span>{{ selectedRobot?.name }}</span>
             <strong>{{ selectedRobot?.currentTask }}</strong>
-            <p>电量 {{ selectedRobot?.battery }}% / 下次 {{ selectedRobot?.nextPlanAt }}</p>
+          </div>
+          <div class="device-status-grid">
+            <article>
+              <span>电量</span>
+              <strong>{{ selectedRobot?.battery }}%</strong>
+            </article>
+            <article>
+              <span>投喂机</span>
+              <strong>{{ selectedRobot?.feederStatus }}</strong>
+            </article>
+            <article>
+              <span>运动</span>
+              <strong>{{ selectedRobot?.motionStatus }}</strong>
+            </article>
+            <article>
+              <span>下次计划</span>
+              <strong>{{ selectedRobot?.nextPlanAt }}</strong>
+            </article>
           </div>
         </section>
 
@@ -463,19 +502,6 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
                 <em>{{ item.unit }}</em>
               </strong>
             </article>
-          </div>
-        </section>
-
-        <section class="rail-module">
-          <div class="rail-head">
-            <strong>系统入口</strong>
-            <span>子系统</span>
-          </div>
-          <div class="link-stack">
-            <RouterLink v-for="link in systemLinks" :key="link.to" :to="link.to">
-              <span>{{ link.label }}</span>
-              <i></i>
-            </RouterLink>
           </div>
         </section>
 
@@ -868,6 +894,43 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   height: 34px;
 }
 
+.water-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.water-mini-grid article {
+  min-width: 0;
+  padding: 5px 6px;
+  background: rgba(18, 70, 178, 0.045);
+  border: 1px solid rgba(121, 210, 255, 0.08);
+  border-left: 2px solid rgba(113, 229, 170, 0.48);
+}
+
+.water-mini-grid article.warning {
+  border-left-color: rgba(255, 191, 107, 0.72);
+}
+
+.water-mini-grid span,
+.water-mini-grid em {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.water-mini-grid strong {
+  display: block;
+  margin: 2px 0;
+  color: #ffffff;
+  font-size: 11px;
+  line-height: 1.35;
+  word-break: break-all;
+}
+
 .compact-grid {
   min-height: 0;
   display: grid;
@@ -975,7 +1038,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 
 .device-visual {
   position: relative;
-  height: 48px;
+  height: 42px;
   margin-bottom: 6px;
   background:
     linear-gradient(rgba(121, 210, 255, 0.045) 1px, transparent 1px),
@@ -1035,6 +1098,38 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   line-height: 1.45;
 }
 
+.device-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.device-status-grid article {
+  min-width: 0;
+  padding: 5px 6px;
+  background: rgba(18, 70, 178, 0.045);
+  border: 1px solid rgba(121, 210, 255, 0.08);
+}
+
+.device-status-grid span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.device-status-grid strong {
+  display: block;
+  margin-top: 2px;
+  color: #ffffff;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .mini-event {
   padding: 6px 7px;
   background: rgba(18, 70, 178, 0.05);
@@ -1073,7 +1168,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .right-rail {
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1.05fr) 132px minmax(0, 0.95fr);
+  grid-template-rows: minmax(0, 1.08fr) minmax(0, 0.92fr);
   gap: 10px;
   padding: 9px;
   overflow: auto;
@@ -1100,7 +1195,6 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 }
 
 .stat-stack,
-.link-stack,
 .rail-events {
   padding: 7px;
   min-height: 0;
@@ -1150,32 +1244,6 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   font-size: 11px;
   font-style: normal;
   font-weight: 400;
-}
-
-.link-stack {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
-}
-
-.link-stack a {
-  min-width: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 6px 8px;
-  color: #dff8ff;
-  font-size: 11px;
-  line-height: 1.45;
-  text-decoration: none;
-  background: rgba(18, 70, 178, 0.035);
-  border: 1px solid rgba(121, 210, 255, 0.07);
-}
-
-.link-stack i {
-  width: 10px;
-  height: 1px;
-  background: rgba(91, 214, 255, 0.56);
 }
 
 .rail-events {
@@ -1238,7 +1306,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 
 .trend-pack {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
