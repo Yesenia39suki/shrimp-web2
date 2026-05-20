@@ -18,6 +18,10 @@ const router = createRouter({
   routes: [
     {
       path: '/',
+      redirect: '/system',
+    },
+    {
+      path: '/console-old',
       name: 'operation-console',
       component: OperationConsoleView,
     },
