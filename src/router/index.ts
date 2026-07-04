@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { useAuthStore } from '@/stores/authStore'
+import LoginView from '@/views/LoginView.vue'
 import OperationConsoleView from '@/views/OperationConsoleView.vue'
 import OperationConsoleV4View from '@/views/OperationConsoleV4View.vue'
 import OperationConsoleV5View from '@/views/OperationConsoleV5View.vue'
@@ -19,6 +21,14 @@ const router = createRouter({
     {
       path: '/',
       redirect: '/system',
+    },
+    {
+      path: '/login',
+      name: 'login',
+      component: LoginView,
+      meta: {
+        public: true,
+      },
     },
     {
       path: '/console-old',
@@ -82,6 +92,26 @@ const router = createRouter({
       ],
     },
   ],
+})
+
+router.beforeEach((to) => {
+  const authStore = useAuthStore()
+  authStore.loadMockSession()
+
+  if (to.meta.public && authStore.isLoggedIn) {
+    return '/system'
+  }
+
+  if (!to.meta.public && !authStore.isLoggedIn) {
+    return {
+      path: '/login',
+      query: {
+        redirect: to.fullPath,
+      },
+    }
+  }
+
+  return true
 })
 
 export default router

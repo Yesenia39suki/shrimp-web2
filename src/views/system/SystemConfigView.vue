@@ -1,90 +1,63 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
-import type { RangeThreshold } from '@/stores/shrimpSystem'
+import { cloneBusinessConfig } from '@/services/mockDataService'
+import { useAuthStore } from '@/stores/authStore'
 import { useShrimpSystemStore } from '@/stores/shrimpSystem'
+import type { BusinessConfig, WaterThresholdMetricKey } from '@/types/business'
 
+const authStore = useAuthStore()
 const store = useShrimpSystemStore()
 
-const waterConfigKeys = ['temperature', 'oxygen', 'ph', 'ammonia', 'nitrite'] as const
+const form = reactive<BusinessConfig>(cloneBusinessConfig(store.businessConfig))
+const saveMessage = ref('')
 
-const shrimpConfigKeys = ['length', 'weight', 'maturity'] as const
-
-interface ThresholdRow {
-  key: string
+const thresholdFields: Array<{
+  key: WaterThresholdMetricKey
   label: string
   unit: string
-  threshold: RangeThreshold
-}
+  step: string
+}> = [
+  { key: 'temperature', label: '温度上下限', unit: '℃', step: '0.1' },
+  { key: 'oxygen', label: '溶解氧上下限', unit: '毫克/升', step: '0.1' },
+  { key: 'ph', label: 'pH 上下限', unit: '', step: '0.1' },
+  { key: 'orp', label: '氧化还原电位上下限', unit: '毫伏', step: '1' },
+  { key: 'turbidity', label: '浊度上下限', unit: '度', step: '1' },
+  { key: 'ammonia', label: '氨氮上下限', unit: '毫克/升', step: '0.01' },
+  { key: 'nitrite', label: '亚硝酸盐上下限', unit: '毫克/升', step: '0.01' },
+  { key: 'hardness', label: '钙/镁硬度上下限', unit: '毫克/升', step: '1' },
+]
 
-function metricLabel(metricKey: string) {
-  return (
-    store.waterMetrics.find((metric) => metric.key === metricKey)?.label ||
-    store.shrimpMetrics.find((metric) => metric.key === metricKey)?.label ||
-    metricKey
-  )
-}
+const robotTypes = ['投喂巡检型', '水质采样型', '增氧联动型', '料台观察型']
 
-function metricUnit(metricKey: string) {
-  return (
-    store.waterMetrics.find((metric) => metric.key === metricKey)?.unit ||
-    store.shrimpMetrics.find((metric) => metric.key === metricKey)?.unit ||
-    ''
-  )
-}
+const canEdit = computed(() => authStore.canEditBusinessConfig)
+const permissionText = computed(() =>
+  canEdit.value ? '当前角色可保存配置' : '当前账号仅有查看权限',
+)
+const organizationName = computed(() => authStore.currentOrganization?.name ?? '未选择企业')
 
-const waterThresholdRows = computed<ThresholdRow[]>(() => {
-  return waterConfigKeys.flatMap((key) => {
-    const threshold = store.thresholds.water[key]
+watch(
+  () => store.businessConfig,
+  (businessConfig) => {
+    Object.assign(form, cloneBusinessConfig(businessConfig))
+    saveMessage.value = ''
+  },
+  { immediate: true },
+)
 
-    if (!threshold) {
-      return []
-    }
-
-    return [{ key, label: metricLabel(key), unit: metricUnit(key), threshold }]
-  })
-})
-
-const shrimpThresholdRows = computed<ThresholdRow[]>(() => {
-  return shrimpConfigKeys.flatMap((key) => {
-    const threshold = store.thresholds.shrimp[key]
-
-    if (!threshold) {
-      return []
-    }
-
-    return [{ key, label: metricLabel(key), unit: metricUnit(key), threshold }]
-  })
-})
-
-function normalizePondIds() {
-  const cleanedPondIds = Array.from(
-    new Set(store.pondConfig.pondIds.map((pondId) => pondId.trim()).filter(Boolean)),
-  )
-
-  store.pondConfig.pondIds.splice(
-    0,
-    store.pondConfig.pondIds.length,
-    ...(cleanedPondIds.length > 0 ? cleanedPondIds : ['A-01']),
-  )
-
-  if (!store.pondConfig.pondIds.includes(store.pondConfig.selectedPondId)) {
-    store.selectPond(store.pondConfig.pondIds[0] ?? 'A-01')
-  }
-}
-
-function addPondId() {
-  store.pondConfig.pondIds.push(`P-${String(store.pondConfig.pondIds.length + 1).padStart(2, '0')}`)
-  normalizePondIds()
-}
-
-function removePondId(index: number) {
-  if (store.pondConfig.pondIds.length <= 1) {
+function handleSave() {
+  if (!canEdit.value) {
+    saveMessage.value = '当前账号仅有查看权限'
     return
   }
 
-  store.pondConfig.pondIds.splice(index, 1)
-  normalizePondIds()
+  store.saveBusinessConfig(cloneBusinessConfig(form))
+  saveMessage.value = '配置已保存'
+}
+
+function handleReset() {
+  Object.assign(form, cloneBusinessConfig(store.businessConfig))
+  saveMessage.value = ''
 }
 </script>
 
@@ -93,132 +66,151 @@ function removePondId(index: number) {
     <div class="page-head">
       <div>
         <span>自定义内容</span>
-        <h1>系统配置与异常规则</h1>
-        <p>修改上下限后立即参与异常计算，顶部铃铛同步刷新</p>
+        <h1>企业养殖配置</h1>
+        <p>当前配置按企业隔离保存，刷新网页后仍保留本地模拟数据。</p>
       </div>
-      <strong>当前异常 {{ store.activeAlertCount }} 条</strong>
+
+      <div class="page-actions">
+        <div class="tenant-chip">
+          <strong>{{ organizationName }}</strong>
+          <em>{{ authStore.currentRoleText }}</em>
+        </div>
+        <button type="button" :disabled="!canEdit" @click="handleSave">保存配置</button>
+        <button type="button" class="ghost" @click="handleReset">重置</button>
+        <span :class="{ warning: !canEdit, success: saveMessage === '配置已保存' }">
+          {{ saveMessage || permissionText }}
+        </span>
+      </div>
     </div>
 
     <div class="config-layout">
-      <section class="config-panel">
+      <section class="config-panel pond-panel">
         <div class="panel-title">
-          <strong>基础配置</strong>
-          <span>池号 / 虾种 / 机器人</span>
+          <strong>池塘基础信息</strong>
+          <span>当前企业独立配置</span>
         </div>
-        <h2>水池配置</h2>
-        <div class="pond-edit-list">
-          <div v-for="(pondId, index) in store.pondConfig.pondIds" :key="`${pondId}-${index}`">
-            <input
-              v-model="store.pondConfig.pondIds[index]"
-              type="text"
-              aria-label="自定义水池编号"
-              @blur="normalizePondIds"
-            />
-            <button type="button" @click="removePondId(index)">删除</button>
-          </div>
-          <button type="button" class="add-pond-button" @click="addPondId">新增水池编号</button>
-        </div>
+
         <label>
-          <span>当前水池编号</span>
-          <select
-            v-model="store.pondConfig.selectedPondId"
-            @change="store.selectPond(store.pondConfig.selectedPondId)"
-          >
-            <option v-for="pondId in store.pondConfig.pondIds" :key="pondId" :value="pondId">
-              {{ pondId }}
-            </option>
-          </select>
-        </label>
-        <h2>虾种配置</h2>
-        <label>
-          <span>虾的种类</span>
-          <input v-model="store.shrimpConfig.species" type="text" />
-        </label>
-        <h2>机器人配置</h2>
-        <div class="robot-config-list">
-          <div v-for="robot in store.robotConfig.robots" :key="robot.id">
-            <input v-model="robot.id" type="text" aria-label="机器人编号" />
-            <input v-model="robot.name" type="text" aria-label="机器人名称" />
-            <select v-model="robot.pondId" aria-label="绑定水池">
-              <option v-for="pondId in store.pondConfig.pondIds" :key="pondId" :value="pondId">
-                {{ pondId }}
-              </option>
-            </select>
-          </div>
-        </div>
-      </section>
-
-      <section class="config-panel">
-        <div class="panel-title">
-          <strong>水质参数上下限</strong>
-          <span>配置变化立即参与异常判断</span>
-        </div>
-        <div class="threshold-list">
-          <div v-for="row in waterThresholdRows" :key="row.key" class="threshold-row">
-            <strong>{{ row.label }}</strong>
-            <input v-model.number="row.threshold.min" type="number" step="0.01" />
-            <span>至</span>
-            <input v-model.number="row.threshold.max" type="number" step="0.01" />
-            <em>{{ row.unit }}</em>
-          </div>
-        </div>
-      </section>
-
-      <section class="config-panel">
-        <div class="panel-title">
-          <strong>虾群参数目标范围</strong>
-          <span>长度 / 重量 / 成熟度</span>
-        </div>
-        <div class="threshold-list">
-          <div v-for="row in shrimpThresholdRows" :key="row.key" class="threshold-row">
-            <strong>{{ row.label }}</strong>
-            <input v-model.number="row.threshold.min" type="number" step="0.01" />
-            <span>至</span>
-            <input v-model.number="row.threshold.max" type="number" step="0.01" />
-            <em>{{ row.unit }}</em>
-          </div>
-        </div>
-      </section>
-
-      <section class="config-panel">
-        <div class="panel-title">
-          <strong>机器人异常判断规则</strong>
-          <span>在线 / 电量 / 投喂机</span>
-        </div>
-        <label class="checkbox-row">
-          <input v-model="store.thresholds.robot.requireOnline" type="checkbox" />
-          <span>机器人必须在线</span>
+          <span>池塘编号</span>
+          <input v-model.trim="form.pond.pond_code" :disabled="!canEdit" type="text" />
         </label>
         <label>
-          <span>最低电量</span>
+          <span>池塘名称</span>
+          <input v-model.trim="form.pond.pond_name" :disabled="!canEdit" type="text" />
+        </label>
+        <label>
+          <span>对虾品种</span>
+          <input v-model.trim="form.pond.shrimp_species" :disabled="!canEdit" type="text" />
+        </label>
+        <label>
+          <span>面积</span>
+          <input v-model.number="form.pond.area" :disabled="!canEdit" type="number" step="0.1" />
+        </label>
+        <label>
+          <span>水深</span>
           <input
-            v-model.number="store.thresholds.robot.minBattery"
+            v-model.number="form.pond.water_depth"
+            :disabled="!canEdit"
             type="number"
-            min="0"
-            max="100"
+            step="0.01"
           />
         </label>
         <label>
-          <span>正常投喂机状态</span>
-          <input v-model="store.thresholds.robot.normalFeederStatus" type="text" />
-        </label>
-        <label>
-          <span>正常异常状态</span>
-          <input v-model="store.thresholds.robot.normalAbnormalStatus" type="text" />
+          <span>位置</span>
+          <input v-model.trim="form.pond.location" :disabled="!canEdit" type="text" />
         </label>
       </section>
 
-      <section class="config-panel live-panel">
+      <section class="config-panel robot-panel">
         <div class="panel-title">
-          <strong>异常联动结果</strong>
-          <span>铃铛读取同一份结果</span>
+          <strong>机器人基础信息</strong>
+          <span>仅做前端模拟配置</span>
         </div>
-        <div v-if="store.allAlerts.length === 0" class="empty">当前无异常</div>
-        <article v-for="alert in store.allAlerts" v-else :key="alert.id" class="live-alert">
-          <strong>{{ alert.type }}</strong>
-          <span>{{ alert.currentValue }} / {{ alert.normalRange }}</span>
-          <p>{{ alert.suggestion }}</p>
-        </article>
+
+        <label>
+          <span>机器人编号</span>
+          <input v-model.trim="form.robot.robot_code" :disabled="!canEdit" type="text" />
+        </label>
+        <label>
+          <span>机器人名称</span>
+          <input v-model.trim="form.robot.robot_name" :disabled="!canEdit" type="text" />
+        </label>
+        <label>
+          <span>机器人类型</span>
+          <select v-model="form.robot.robot_type" :disabled="!canEdit">
+            <option v-for="type in robotTypes" :key="type" :value="type">
+              {{ type }}
+            </option>
+          </select>
+        </label>
+
+        <div class="preview-box">
+          <strong>当前绑定关系</strong>
+          <p>企业：{{ organizationName }}</p>
+          <p>虾池：{{ form.pond.pond_code }} / {{ form.pond.pond_name }}</p>
+          <p>机器人：{{ form.robot.robot_code }} / {{ form.robot.robot_name }}</p>
+        </div>
+      </section>
+
+      <section class="config-panel threshold-panel">
+        <div class="panel-title">
+          <strong>水质参数上下限</strong>
+          <span>保存后参与异常判断</span>
+        </div>
+
+        <div class="threshold-list">
+          <div v-for="field in thresholdFields" :key="field.key" class="threshold-row">
+            <strong>{{ field.label }}</strong>
+            <input
+              v-model.number="form.waterThreshold[field.key].min"
+              :disabled="!canEdit"
+              type="number"
+              :step="field.step"
+            />
+            <span>至</span>
+            <input
+              v-model.number="form.waterThreshold[field.key].max"
+              :disabled="!canEdit"
+              type="number"
+              :step="field.step"
+            />
+            <em>{{ field.unit }}</em>
+          </div>
+        </div>
+      </section>
+
+      <section class="config-panel summary-panel">
+        <div class="panel-title">
+          <strong>模拟数据隔离状态</strong>
+          <span>后续替换 Supabase 服务</span>
+        </div>
+
+        <dl>
+          <div>
+            <dt>当前企业</dt>
+            <dd>{{ organizationName }}</dd>
+          </div>
+          <div>
+            <dt>当前用户</dt>
+            <dd>{{ authStore.currentUser?.display_name }}</dd>
+          </div>
+          <div>
+            <dt>当前角色</dt>
+            <dd>{{ authStore.currentRoleText }}</dd>
+          </div>
+          <div>
+            <dt>当前池号</dt>
+            <dd>{{ store.pondConfig.selectedPondId }}</dd>
+          </div>
+          <div>
+            <dt>异常数量</dt>
+            <dd>{{ store.activeAlertCount }} 条</dd>
+          </div>
+        </dl>
+
+        <div class="notice-box" :class="{ warning: !canEdit }">
+          {{ permissionText }}
+        </div>
       </section>
     </div>
   </section>
@@ -246,6 +238,7 @@ function removePondId(index: number) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 14px;
   padding: 0 18px;
 }
 
@@ -267,19 +260,75 @@ function removePondId(index: number) {
   line-height: 1.5;
 }
 
-.page-head strong {
-  padding: 8px 12px;
+.page-actions {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(190px, 240px) 86px 62px minmax(140px, 190px);
+  align-items: center;
+  gap: 8px;
+}
+
+.tenant-chip {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 7px 10px;
+  background: rgba(16, 54, 138, 0.18);
+  border: 1px solid rgba(121, 210, 255, 0.12);
+}
+
+.tenant-chip strong {
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tenant-chip em {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.page-actions button {
+  height: 34px;
+  color: #dff8ff;
+  background: rgba(12, 54, 82, 0.88);
+  border: 1px solid rgba(121, 210, 255, 0.22);
+  cursor: pointer;
+}
+
+.page-actions button.ghost {
+  background: rgba(8, 30, 78, 0.64);
+}
+
+.page-actions button:disabled {
+  color: rgba(223, 248, 255, 0.42);
+  background: rgba(8, 30, 78, 0.38);
+  border-color: rgba(121, 210, 255, 0.08);
+  cursor: not-allowed;
+}
+
+.page-actions > span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.page-actions > span.warning {
   color: var(--warning);
-  font-size: 14px;
-  background: rgba(255, 191, 107, 0.08);
-  border: 1px solid rgba(255, 191, 107, 0.18);
+}
+
+.page-actions > span.success {
+  color: #69e2a4;
 }
 
 .config-layout {
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) 380px;
-  grid-auto-rows: minmax(0, 1fr);
+  grid-template-columns: 330px 330px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 190px;
   gap: 12px;
   overflow: hidden;
 }
@@ -290,8 +339,12 @@ function removePondId(index: number) {
   padding-bottom: 12px;
 }
 
-.live-panel {
+.threshold-panel {
   grid-row: span 2;
+}
+
+.summary-panel {
+  grid-column: 1 / 3;
 }
 
 .panel-title {
@@ -299,6 +352,7 @@ function removePondId(index: number) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 0 14px;
   background: rgba(12, 40, 104, 0.22);
   border-bottom: 1px solid rgba(121, 210, 255, 0.1);
@@ -313,16 +367,9 @@ function removePondId(index: number) {
   font-size: 12px;
 }
 
-h2 {
-  margin: 14px 14px 4px;
-  color: var(--cyan);
-  font-size: 13px;
-  font-weight: 700;
-}
-
 label {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: 104px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   margin: 12px 14px 0;
@@ -353,47 +400,31 @@ select:focus {
   border-color: rgba(121, 210, 255, 0.34);
 }
 
-.robot-config-list {
-  display: grid;
-  gap: 8px;
+input:disabled,
+select:disabled {
+  color: rgba(244, 252, 255, 0.58);
+  background: rgba(8, 30, 78, 0.38);
+  cursor: not-allowed;
+}
+
+.preview-box,
+.notice-box {
   margin: 12px 14px 0;
-}
-
-.pond-edit-list {
-  display: grid;
-  gap: 8px;
-  margin: 12px 14px 0;
-}
-
-.pond-edit-list div {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 64px;
-  gap: 8px;
-  padding: 8px;
+  padding: 12px;
   background: rgba(16, 54, 138, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.08);
+  border: 1px solid rgba(121, 210, 255, 0.1);
 }
 
-.pond-edit-list button,
-.add-pond-button {
-  height: 32px;
-  color: #dff8ff;
-  background: rgba(8, 30, 78, 0.76);
-  border: 1px solid rgba(121, 210, 255, 0.16);
+.preview-box strong {
+  color: var(--text-main);
+  font-size: 13px;
 }
 
-.pond-edit-list button:hover,
-.add-pond-button:hover {
-  border-color: rgba(121, 210, 255, 0.32);
-}
-
-.robot-config-list div {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) 76px;
-  gap: 8px;
-  padding: 8px;
-  background: rgba(16, 54, 138, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.08);
+.preview-box p {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .threshold-list {
@@ -404,7 +435,7 @@ select:focus {
 
 .threshold-row {
   display: grid;
-  grid-template-columns: 120px 1fr 24px 1fr 68px;
+  grid-template-columns: 146px 1fr 24px 1fr 72px;
   align-items: center;
   gap: 8px;
   padding: 8px;
@@ -419,45 +450,41 @@ select:focus {
   font-style: normal;
 }
 
-.checkbox-row {
-  grid-template-columns: 18px minmax(0, 1fr);
+dl {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 14px 0;
 }
 
-.checkbox-row input {
-  width: 16px;
-  height: 16px;
-  padding: 0;
-}
-
-.empty {
-  padding: 24px 14px;
-  color: var(--text-muted);
-  text-align: center;
-}
-
-.live-alert {
-  margin: 10px 12px;
+dl div {
+  min-width: 0;
   padding: 10px;
   background: rgba(16, 54, 138, 0.12);
-  border: 1px solid rgba(255, 191, 107, 0.22);
+  border: 1px solid rgba(121, 210, 255, 0.08);
 }
 
-.live-alert strong {
+dt {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+dd {
+  overflow: hidden;
+  margin: 6px 0 0;
   color: var(--text-main);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notice-box {
+  color: #69e2a4;
   font-size: 13px;
 }
 
-.live-alert span {
-  display: block;
-  margin-top: 5px;
+.notice-box.warning {
   color: var(--warning);
-  font-size: 12px;
-}
-
-.live-alert p {
-  margin: 7px 0 0;
-  color: var(--text-normal);
-  font-size: 12px;
-  line-height: 1.45;
+  border-color: rgba(255, 191, 107, 0.2);
 }
 </style>

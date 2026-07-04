@@ -1,5 +1,12 @@
 import { defineStore } from 'pinia'
 
+import {
+  getDefaultOrganizationId,
+  getMockSystemData,
+  saveBusinessConfig as saveMockBusinessConfig,
+} from '@/services/mockDataService'
+import type { BusinessConfig } from '@/types/business'
+
 export type MetricSource = '水质参数' | '虾群参数' | '机器人状态' | '模型评估'
 export type AlertLevel = '关注' | '预警'
 
@@ -55,6 +62,8 @@ export interface PondProfile {
 }
 
 interface ShrimpSystemState {
+  organizationId: string
+  businessConfig: BusinessConfig
   systemMeta: {
     systemName: string
     logoText: string
@@ -492,6 +501,8 @@ const initialRobots: RobotInfo[] = [
 ]
 
 const defaultPondProfile = initialPondProfiles[0]!
+const defaultOrganizationId = getDefaultOrganizationId()
+const defaultSystemData = getMockSystemData(defaultOrganizationId)
 
 function isNumberValue(value: number | string): value is number {
   return typeof value === 'number' && Number.isFinite(value)
@@ -549,6 +560,8 @@ function metricText(metrics: SystemMetric[], key: string) {
 
 export const useShrimpSystemStore = defineStore('shrimpSystem', {
   state: (): ShrimpSystemState => ({
+    organizationId: defaultOrganizationId,
+    businessConfig: defaultSystemData.businessConfig,
     systemMeta: {
       systemName: '虾群养殖投喂系统',
       logoText: 'UpcShrimpFeeding',
@@ -612,7 +625,9 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
   }),
   getters: {
     selectedPondProfile(state): PondProfile | undefined {
-      return state.pondProfiles.find((profile) => profile.pondId === state.pondConfig.selectedPondId)
+      return state.pondProfiles.find(
+        (profile) => profile.pondId === state.pondConfig.selectedPondId,
+      )
     },
     waterAlerts(state): SystemAlert[] {
       return buildRangeAlerts(state.waterMetrics, state.thresholds.water, '水质参数')
@@ -749,6 +764,26 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
     },
   },
   actions: {
+    loadOrganizationData(organizationId: string) {
+      const systemData = getMockSystemData(organizationId)
+
+      this.organizationId = organizationId
+      this.businessConfig = systemData.businessConfig
+      this.systemMeta = systemData.systemMeta
+      this.pondProfiles = systemData.pondProfiles
+      this.waterMetrics = cloneMetrics(systemData.waterMetrics)
+      this.shrimpMetrics = cloneMetrics(systemData.shrimpMetrics)
+      this.robots = systemData.robots
+      this.thresholds = systemData.thresholds
+      this.pondConfig = systemData.pondConfig
+      this.shrimpConfig = systemData.shrimpConfig
+      this.robotConfig = systemData.robotConfig
+      this.selectPond(systemData.pondConfig.selectedPondId)
+    },
+    saveBusinessConfig(config: BusinessConfig) {
+      saveMockBusinessConfig(this.organizationId, config)
+      this.loadOrganizationData(this.organizationId)
+    },
     selectPond(pondId: string) {
       this.pondConfig.selectedPondId = pondId
       this.systemMeta.currentPondId = pondId

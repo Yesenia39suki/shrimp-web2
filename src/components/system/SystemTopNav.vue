@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import NotificationBell from '@/components/system/NotificationBell.vue'
+import { useAuthStore } from '@/stores/authStore'
 import { useShrimpSystemStore } from '@/stores/shrimpSystem'
 
 const store = useShrimpSystemStore()
+const authStore = useAuthStore()
 const route = useRoute()
+const router = useRouter()
 const currentTime = ref('')
 let timerId: number | undefined
 
@@ -41,6 +44,15 @@ function updateTime() {
   currentTime.value = `${now.getFullYear()}年${pad(now.getMonth() + 1)}月${pad(now.getDate())}日 ${pad(
     now.getHours(),
   )}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+}
+
+function handleOrganizationChange(event: Event) {
+  authStore.switchOrganization((event.target as HTMLSelectElement).value)
+}
+
+function handleLogout() {
+  authStore.logout()
+  router.replace('/login')
 }
 
 onMounted(() => {
@@ -123,10 +135,29 @@ onBeforeUnmount(() => {
     <section class="nav-status">
       <NotificationBell />
       <div class="time-box">{{ currentTime }}</div>
-      <div class="online-state">
-        <i></i>
-        <span>{{ store.systemMeta.online ? '系统在线' : '系统离线' }}</span>
+      <div class="user-box">
+        <div class="user-line">
+          <strong>{{ authStore.currentUser?.display_name ?? '未登录用户' }}</strong>
+          <span>
+            <i :class="{ offline: !store.systemMeta.online }"></i>
+            {{ authStore.currentRoleText }}
+          </span>
+        </div>
+        <select
+          :value="authStore.currentOrganization?.id"
+          aria-label="切换当前企业"
+          @change="handleOrganizationChange"
+        >
+          <option
+            v-for="organization in authStore.organizations"
+            :key="organization.id"
+            :value="organization.id"
+          >
+            {{ organization.name }}
+          </option>
+        </select>
       </div>
+      <button type="button" class="logout-button" @click="handleLogout">退出</button>
     </section>
   </header>
 </template>
@@ -137,7 +168,7 @@ onBeforeUnmount(() => {
   z-index: 3;
   height: 70px;
   display: grid;
-  grid-template-columns: 316px minmax(0, 1fr) 420px;
+  grid-template-columns: 300px minmax(0, 1fr) 560px;
   align-items: center;
   gap: 14px;
   padding: 0 18px;
@@ -401,14 +432,14 @@ onBeforeUnmount(() => {
 }
 
 .nav-status {
-  display: flex;
+  display: grid;
+  grid-template-columns: 42px 188px minmax(220px, 250px) 50px;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
 
-.time-box,
-.online-state {
+.time-box {
   height: 36px;
   display: inline-flex;
   align-items: center;
@@ -422,17 +453,86 @@ onBeforeUnmount(() => {
 }
 
 .time-box {
-  width: 190px;
   justify-content: center;
   font-variant-numeric: tabular-nums;
 }
 
-.online-state i {
+.user-box {
+  min-width: 0;
+  height: 46px;
+  display: grid;
+  grid-template-columns: minmax(82px, 0.72fr) minmax(126px, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  background: rgba(13, 51, 132, 0.36);
+  border: 1px solid rgba(121, 210, 255, 0.18);
+  border-radius: 8px;
+  box-shadow: 0 0 14px rgba(22, 67, 164, 0.14) inset;
+}
+
+.user-line {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.user-line strong {
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-line span {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-line i {
   width: 7px;
   height: 7px;
   margin-right: 7px;
   background: #69e2a4;
   border-radius: 50%;
   box-shadow: 0 0 10px rgba(105, 226, 164, 0.75);
+}
+
+.user-line i.offline {
+  background: var(--danger);
+  box-shadow: 0 0 10px rgba(255, 111, 125, 0.72);
+}
+
+.user-box select {
+  min-width: 0;
+  height: 30px;
+  color: var(--text-main);
+  font-size: 12px;
+  background: rgba(8, 30, 78, 0.78);
+  border: 1px solid rgba(121, 210, 255, 0.16);
+  outline: none;
+}
+
+.logout-button {
+  height: 34px;
+  color: #dff8ff;
+  font-size: 12px;
+  background: rgba(8, 30, 78, 0.76);
+  border: 1px solid rgba(121, 210, 255, 0.18);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.logout-button:hover {
+  border-color: rgba(121, 210, 255, 0.38);
 }
 </style>

@@ -1,8 +1,24 @@
 <script setup lang="ts">
+import { watch } from 'vue'
 import { RouterView } from 'vue-router'
 
 import QingdaoMapBackground from '@/components/system/QingdaoMapBackground.vue'
 import SystemTopNav from '@/components/system/SystemTopNav.vue'
+import { useAuthStore } from '@/stores/authStore'
+import { useShrimpSystemStore } from '@/stores/shrimpSystem'
+
+const authStore = useAuthStore()
+const systemStore = useShrimpSystemStore()
+
+watch(
+  () => authStore.currentOrganization?.id,
+  (organizationId) => {
+    if (organizationId) {
+      systemStore.loadOrganizationData(organizationId)
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
