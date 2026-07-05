@@ -1,9 +1,19 @@
-export type OrganizationRole = 'owner' | 'admin' | 'operator' | 'viewer'
+export type UserRole = 'owner' | 'admin' | 'operator' | 'viewer'
+export type OrganizationRole = UserRole
+
+export interface TimeRange {
+  startAt: string
+  endAt: string
+}
 
 export interface UserProfile {
   id: string
   display_name: string
   email: string
+  phone?: string
+  avatar_url?: string
+  created_at?: string
+  updated_at?: string
 }
 
 export interface Organization {
@@ -12,6 +22,9 @@ export interface Organization {
   short_name: string
   region: string
   status: string
+  owner_user_id?: string
+  created_at?: string
+  updated_at?: string
 }
 
 export interface OrganizationMember {
@@ -19,6 +32,9 @@ export interface OrganizationMember {
   organization_id: string
   user_id: string
   role: OrganizationRole
+  display_name?: string
+  email?: string
+  joined_at?: string
 }
 
 export interface Pond {
@@ -30,6 +46,29 @@ export interface Pond {
   area: number
   water_depth: number
   location: string
+  map_position?: PondMapPosition
+  scene_position?: PondScenePosition
+  created_at?: string
+  updated_at?: string
+}
+
+export interface PondMapPosition {
+  organization_id: string
+  pond_id: string
+  longitude: number
+  latitude: number
+  label?: string
+}
+
+export interface PondScenePosition {
+  organization_id: string
+  pond_id: string
+  x: number
+  y: number
+  z: number
+  width?: number
+  length?: number
+  rotationY?: number
 }
 
 export interface ThresholdRange {
@@ -40,6 +79,7 @@ export interface ThresholdRange {
 export interface WaterThreshold {
   id: string
   organization_id: string
+  pond_id?: string
   temperature: ThresholdRange
   oxygen: ThresholdRange
   ph: ThresholdRange
@@ -50,7 +90,10 @@ export interface WaterThreshold {
   hardness: ThresholdRange
 }
 
-export type WaterThresholdMetricKey = Exclude<keyof WaterThreshold, 'id' | 'organization_id'>
+export type WaterThresholdMetricKey = Exclude<
+  keyof WaterThreshold,
+  'id' | 'organization_id' | 'pond_id'
+>
 
 export interface Robot {
   id: string
@@ -59,6 +102,19 @@ export interface Robot {
   robot_code: string
   robot_name: string
   robot_type: string
+  status?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface RobotBinding {
+  id: string
+  organization_id: string
+  pond_id: string
+  robot_id: string
+  bound_at: string
+  unbound_at?: string
+  active: boolean
 }
 
 export interface BusinessConfig {

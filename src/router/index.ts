@@ -7,6 +7,7 @@ import OperationConsoleV4View from '@/views/OperationConsoleV4View.vue'
 import OperationConsoleV5View from '@/views/OperationConsoleV5View.vue'
 import OperationConsoleV6View from '@/views/OperationConsoleV6View.vue'
 import SystemShellLayout from '@/components/system/SystemShellLayout.vue'
+import ExtensionCenterView from '@/views/system/ExtensionCenterView.vue'
 import RobotMonitorView from '@/views/system/RobotMonitorView.vue'
 import ShrimpMetricDetailView from '@/views/system/ShrimpMetricDetailView.vue'
 import ShrimpOverviewView from '@/views/system/ShrimpOverviewView.vue'
@@ -83,6 +84,11 @@ const router = createRouter({
           path: 'robot',
           name: 'system-robot',
           component: RobotMonitorView,
+        },
+        {
+          path: 'extensions',
+          name: 'system-extensions',
+          component: ExtensionCenterView,
         },
         {
           path: 'config',

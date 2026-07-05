@@ -144,15 +144,21 @@ function getRobotAlerts(robotId: string) {
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(520px, max-content);
+  align-content: start;
   gap: 12px;
   overflow: auto;
+  padding-right: 4px;
+  overscroll-behavior: contain;
 }
 
 .robot-panel {
   min-height: 0;
+  max-height: 100%;
   display: grid;
-  grid-template-rows: 58px auto auto auto minmax(0, 1fr);
-  overflow: hidden;
+  grid-template-rows: 58px auto auto auto minmax(120px, 1fr);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .robot-title {
@@ -253,10 +259,15 @@ dd {
 
 .robot-alerts,
 .commands {
+  min-height: 0;
   margin: 0 14px 14px;
   padding: 10px;
   background: rgba(16, 54, 138, 0.12);
   border: 1px solid rgba(121, 210, 255, 0.1);
+}
+
+.commands {
+  overflow: auto;
 }
 
 .robot-alerts span {

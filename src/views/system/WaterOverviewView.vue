@@ -302,7 +302,7 @@ watch(
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: 172px minmax(0, 1fr) 218px;
+  grid-template-rows: 228px minmax(0, 1fr) 218px;
   gap: 14px;
   overflow: hidden;
 }
@@ -326,10 +326,14 @@ watch(
 
 .water-stage {
   display: grid;
-  grid-template-columns: minmax(300px, 0.72fr) minmax(420px, 1fr);
-  grid-template-rows: minmax(0, 1fr) 62px;
-  gap: 12px 20px;
-  padding: 18px 20px 14px;
+  grid-template-columns: minmax(300px, 0.7fr) minmax(420px, 1fr);
+  grid-template-rows: 58px 66px 58px;
+  grid-template-areas:
+    'copy tools'
+    'readings readings'
+    'meta meta';
+  gap: 10px 20px;
+  padding: 14px 20px 12px;
 }
 
 .water-stage::before {
@@ -356,26 +360,33 @@ watch(
   z-index: 1;
 }
 
+.water-copy {
+  grid-area: copy;
+  min-width: 0;
+}
+
 .water-copy span {
   color: var(--cyan);
   font-size: 13px;
 }
 
 .water-copy h1 {
-  margin: 10px 0 0;
+  margin: 5px 0 0;
   color: var(--text-main);
-  font-size: 32px;
+  font-size: 28px;
+  line-height: 1.05;
 }
 
 .water-copy p {
   max-width: 480px;
-  margin: 10px 0 0;
+  margin: 5px 0 0;
   color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .stage-tools {
+  grid-area: tools;
   display: flex;
   justify-content: flex-end;
   align-items: flex-start;
@@ -435,6 +446,7 @@ watch(
 }
 
 .reading-strip {
+  grid-area: readings;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
@@ -458,9 +470,10 @@ watch(
 
 .reading-strip strong {
   display: block;
-  margin-top: 6px;
+  margin-top: 4px;
   color: #ffffff;
   font-size: 24px;
+  line-height: 1.05;
 }
 
 .reading-strip em {
@@ -472,7 +485,7 @@ watch(
 }
 
 .water-meta {
-  grid-column: 1 / 3;
+  grid-area: meta;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;

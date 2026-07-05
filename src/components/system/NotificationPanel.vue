@@ -7,7 +7,13 @@ import { useShrimpSystemStore } from '@/stores/shrimpSystem'
 const store = useShrimpSystemStore()
 const activeFilter = ref<'全部' | MetricSource>('全部')
 
-const filterOptions: Array<'全部' | MetricSource> = ['全部', '水质参数', '虾群参数', '机器人状态', '模型评估']
+const filterOptions: Array<'全部' | MetricSource> = [
+  '全部',
+  '水质参数',
+  '虾群参数',
+  '机器人状态',
+  '模型评估',
+]
 
 const filteredAlerts = computed(() => {
   if (activeFilter.value === '全部') {
@@ -95,20 +101,34 @@ function sourceLabel(source: '全部' | MetricSource) {
 <style scoped>
 .notification-panel {
   position: absolute;
-  top: 44px;
-  right: 0;
+  top: 46px;
+  right: -10px;
   width: 540px;
   max-height: 560px;
   overflow: hidden;
   color: var(--text-normal);
   background:
-    linear-gradient(180deg, rgba(34, 100, 228, 0.1), rgba(14, 48, 126, 0.06)),
-    rgba(10, 36, 94, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.18);
+    linear-gradient(180deg, rgba(15, 54, 127, 0.96), rgba(6, 24, 58, 0.96)), rgba(3, 14, 36, 0.98);
+  border: 1px solid rgba(121, 210, 255, 0.42);
+  border-radius: 8px;
   box-shadow:
-    0 20px 44px rgba(8, 24, 65, 0.26),
-    0 0 24px rgba(74, 169, 255, 0.08);
-  backdrop-filter: blur(10px);
+    0 26px 58px rgba(0, 8, 24, 0.52),
+    0 0 30px rgba(74, 169, 255, 0.18);
+  backdrop-filter: blur(14px);
+  z-index: 60;
+}
+
+.notification-panel::after {
+  content: '';
+  position: absolute;
+  top: -7px;
+  right: 22px;
+  width: 12px;
+  height: 12px;
+  background: rgba(15, 54, 127, 0.96);
+  border-top: 1px solid rgba(121, 210, 255, 0.42);
+  border-left: 1px solid rgba(121, 210, 255, 0.42);
+  transform: rotate(45deg);
 }
 
 .notification-panel::before {
@@ -134,8 +154,8 @@ function sourceLabel(source: '全部' | MetricSource) {
   align-items: center;
   justify-content: space-between;
   padding: 0 14px;
-  background: rgba(12, 40, 104, 0.18);
-  border-bottom: 1px solid rgba(121, 210, 255, 0.1);
+  background: rgba(3, 14, 36, 0.34);
+  border-bottom: 1px solid rgba(121, 210, 255, 0.2);
 }
 
 .panel-head div > span {
@@ -154,8 +174,8 @@ function sourceLabel(source: '全部' | MetricSource) {
   padding: 4px 8px;
   color: #d7f1ff;
   font-size: 13px;
-  background: rgba(74, 169, 255, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.2);
+  background: rgba(74, 169, 255, 0.22);
+  border: 1px solid rgba(121, 210, 255, 0.34);
 }
 
 .filter-tabs {
@@ -165,24 +185,24 @@ function sourceLabel(source: '全部' | MetricSource) {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
   padding: 10px;
-  background: rgba(12, 40, 104, 0.12);
-  border-bottom: 1px solid rgba(121, 210, 255, 0.08);
+  background: rgba(3, 14, 36, 0.24);
+  border-bottom: 1px solid rgba(121, 210, 255, 0.16);
 }
 
 .filter-tabs button {
   height: 28px;
   color: var(--text-muted);
   font-size: 12px;
-  background: rgba(16, 54, 138, 0.16);
-  border: 1px solid rgba(121, 210, 255, 0.12);
+  background: rgba(8, 30, 78, 0.74);
+  border: 1px solid rgba(121, 210, 255, 0.22);
   border-radius: 999px;
 }
 
 .filter-tabs button.active,
 .filter-tabs button:hover {
   color: var(--text-main);
-  background: rgba(74, 169, 255, 0.16);
-  border-color: rgba(121, 210, 255, 0.24);
+  background: rgba(37, 101, 185, 0.82);
+  border-color: rgba(121, 210, 255, 0.48);
 }
 
 .empty-message {
@@ -206,8 +226,9 @@ function sourceLabel(source: '全部' | MetricSource) {
   position: relative;
   margin-bottom: 8px;
   padding: 10px;
-  background: rgba(16, 54, 138, 0.1);
-  border: 1px solid rgba(121, 210, 255, 0.1);
+  background: rgba(8, 30, 78, 0.82);
+  border: 1px solid rgba(121, 210, 255, 0.18);
+  border-radius: 6px;
 }
 
 .message-item::before {
@@ -221,7 +242,8 @@ function sourceLabel(source: '全部' | MetricSource) {
 }
 
 .message-item.danger {
-  border-color: rgba(255, 111, 125, 0.18);
+  background: rgba(62, 22, 46, 0.74);
+  border-color: rgba(255, 111, 125, 0.32);
 }
 
 .message-item.danger::before {
@@ -249,14 +271,14 @@ function sourceLabel(source: '全部' | MetricSource) {
   color: var(--warning);
   font-size: 12px;
   font-style: normal;
-  background: rgba(255, 191, 107, 0.08);
-  border: 1px solid rgba(255, 191, 107, 0.14);
+  background: rgba(255, 191, 107, 0.14);
+  border: 1px solid rgba(255, 191, 107, 0.28);
 }
 
 .danger .message-title em {
   color: var(--danger);
-  background: rgba(255, 111, 125, 0.08);
-  border-color: rgba(255, 111, 125, 0.14);
+  background: rgba(255, 111, 125, 0.14);
+  border-color: rgba(255, 111, 125, 0.28);
 }
 
 dl {

@@ -28,6 +28,10 @@ const activeSection = computed(() => {
     return 'robot'
   }
 
+  if (route.path.startsWith('/system/extensions')) {
+    return 'extensions'
+  }
+
   if (route.path.startsWith('/system/config')) {
     return 'config'
   }
@@ -84,7 +88,7 @@ onBeforeUnmount(() => {
           class="nav-link"
           :class="{ active: activeSection === 'water' }"
         >
-          水质参数监测子系统
+          水质监测
         </RouterLink>
         <div class="dropdown-panel">
           <RouterLink
@@ -103,7 +107,7 @@ onBeforeUnmount(() => {
           class="nav-link"
           :class="{ active: activeSection === 'shrimp' }"
         >
-          虾群参数监测子系统
+          虾群分析
         </RouterLink>
         <div class="dropdown-panel">
           <RouterLink
@@ -121,7 +125,14 @@ onBeforeUnmount(() => {
         class="nav-link"
         :class="{ active: activeSection === 'robot' }"
       >
-        机器人实时监测
+        机器人监测
+      </RouterLink>
+      <RouterLink
+        to="/system/extensions"
+        class="nav-link"
+        :class="{ active: activeSection === 'extensions' }"
+      >
+        扩展接口
       </RouterLink>
       <RouterLink
         to="/system/config"
@@ -174,11 +185,11 @@ onBeforeUnmount(() => {
   padding: 0 18px;
   color: var(--text-normal);
   background:
-    linear-gradient(112deg, transparent 0 42%, rgba(121, 210, 255, 0.07) 43%, transparent 46% 100%),
-    linear-gradient(90deg, rgba(27, 93, 247, 0.12), transparent 22% 78%, rgba(74, 169, 255, 0.07)),
-    linear-gradient(180deg, rgba(20, 64, 159, 0.94), rgba(11, 41, 103, 0.96));
+    linear-gradient(112deg, transparent 0 42%, rgba(121, 210, 255, 0.06) 43%, transparent 46% 100%),
+    rgba(3, 14, 36, 0.28);
   border-bottom: 1px solid rgba(121, 210, 255, 0.28);
   box-shadow: 0 10px 24px rgba(10, 31, 81, 0.24);
+  backdrop-filter: blur(8px);
 }
 
 .system-top-nav::after {
@@ -208,7 +219,7 @@ onBeforeUnmount(() => {
   place-items: center;
   border: 1px solid rgba(121, 210, 255, 0.82);
   border-radius: 12px;
-  background: radial-gradient(circle, rgba(74, 169, 255, 0.24), rgba(16, 51, 125, 0.48) 62%);
+  background: rgba(3, 14, 36, 0.16);
   box-shadow:
     0 0 18px rgba(121, 210, 255, 0.34),
     0 0 0 5px rgba(27, 93, 247, 0.08);
@@ -271,8 +282,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 4px;
   padding: 3px 5px;
-  background: rgba(18, 66, 167, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.14);
+  background: rgba(3, 14, 36, 0.12);
+  border: 1px solid rgba(121, 210, 255, 0.18);
   border-radius: 999px;
 }
 
@@ -286,7 +297,7 @@ onBeforeUnmount(() => {
   height: 40px;
   display: inline-flex;
   align-items: center;
-  padding: 0 14px;
+  padding: 0 12px;
   color: #bfe8f6;
   font-size: 13px;
   line-height: 1.2;
@@ -318,8 +329,8 @@ onBeforeUnmount(() => {
 .nav-link:hover {
   color: #ffffff;
   background:
-    radial-gradient(circle at 50% 0, rgba(121, 210, 255, 0.18), transparent 68%),
-    rgba(21, 78, 193, 0.28);
+    radial-gradient(circle at 50% 0, rgba(121, 210, 255, 0.14), transparent 68%),
+    rgba(3, 14, 36, 0.26);
   border-color: rgba(121, 210, 255, 0.28);
   box-shadow:
     0 0 18px rgba(74, 169, 255, 0.18),
@@ -358,7 +369,7 @@ onBeforeUnmount(() => {
   padding: 12px;
   background:
     radial-gradient(circle at 18% 0, rgba(121, 210, 255, 0.12), transparent 44%),
-    linear-gradient(180deg, rgba(21, 74, 181, 0.84), rgba(12, 46, 121, 0.88));
+    rgba(3, 14, 36, 0.76);
   border: 1px solid rgba(121, 210, 255, 0.34);
   border-radius: 10px;
   box-shadow:
@@ -422,7 +433,7 @@ onBeforeUnmount(() => {
 .dropdown-panel a:hover,
 .dropdown-panel a.router-link-active {
   color: #ffffff;
-  background: rgba(48, 121, 255, 0.2);
+  background: rgba(3, 14, 36, 0.32);
   border-color: rgba(121, 210, 255, 0.38);
 }
 
@@ -433,7 +444,7 @@ onBeforeUnmount(() => {
 
 .nav-status {
   display: grid;
-  grid-template-columns: 42px 188px minmax(220px, 250px) 50px;
+  grid-template-columns: 78px 188px minmax(220px, 250px) 50px;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
@@ -446,7 +457,7 @@ onBeforeUnmount(() => {
   padding: 0 10px;
   color: #cceefa;
   font-size: 12px;
-  background: rgba(13, 51, 132, 0.36);
+  background: rgba(3, 14, 36, 0.16);
   border: 1px solid rgba(121, 210, 255, 0.18);
   border-radius: 999px;
   box-shadow: 0 0 14px rgba(22, 67, 164, 0.14) inset;
@@ -465,7 +476,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   padding: 5px 7px;
-  background: rgba(13, 51, 132, 0.36);
+  background: rgba(3, 14, 36, 0.16);
   border: 1px solid rgba(121, 210, 255, 0.18);
   border-radius: 8px;
   box-shadow: 0 0 14px rgba(22, 67, 164, 0.14) inset;
@@ -517,7 +528,7 @@ onBeforeUnmount(() => {
   height: 30px;
   color: var(--text-main);
   font-size: 12px;
-  background: rgba(8, 30, 78, 0.78);
+  background: rgba(3, 14, 36, 0.34);
   border: 1px solid rgba(121, 210, 255, 0.16);
   outline: none;
 }
@@ -526,7 +537,7 @@ onBeforeUnmount(() => {
   height: 34px;
   color: #dff8ff;
   font-size: 12px;
-  background: rgba(8, 30, 78, 0.76);
+  background: rgba(3, 14, 36, 0.2);
   border: 1px solid rgba(121, 210, 255, 0.18);
   border-radius: 999px;
   cursor: pointer;
