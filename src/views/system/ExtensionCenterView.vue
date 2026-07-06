@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import {
   explainAlert,
@@ -46,6 +47,8 @@ type ExtensionModule = 'scene3d' | 'ai' | 'model' | 'feeding' | 'alerts' | 'devi
 
 const authStore = useAuthStore()
 const systemStore = useShrimpSystemStore()
+const route = useRoute()
+const router = useRouter()
 
 const activeModule = ref<ExtensionModule>('scene3d')
 const loading = ref(false)
@@ -142,6 +145,8 @@ const moduleCards = computed(() => [
     desc: '设备与心跳',
   },
 ])
+
+const moduleKeys: ExtensionModule[] = ['scene3d', 'ai', 'model', 'feeding', 'alerts', 'devices']
 
 const timeRange = computed(() => ({
   startAt: new Date(Date.now() - 7 * 24 * 60 * 60_000).toISOString(),
@@ -336,6 +341,27 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => route.query.module,
+  (module) => {
+    if (typeof module === 'string' && moduleKeys.includes(module as ExtensionModule)) {
+      activeModule.value = module as ExtensionModule
+    }
+  },
+  { immediate: true },
+)
+
+function setActiveModule(module: ExtensionModule) {
+  activeModule.value = module
+  router.replace({
+    path: route.path,
+    query: {
+      ...route.query,
+      module,
+    },
+  })
+}
+
 onBeforeUnmount(() => {
   if (robotPositionSubscriptionId) {
     unsubscribeRobotPosition(robotPositionSubscriptionId)
@@ -366,7 +392,7 @@ onBeforeUnmount(() => {
         :key="module.id"
         type="button"
         :class="{ active: activeModule === module.id }"
-        @click="activeModule = module.id"
+        @click="setActiveModule(module.id)"
       >
         <span>{{ module.title }}</span>
         <strong>{{ module.value }}</strong>

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
-import type { MetricSource } from '@/stores/shrimpSystem'
+import type { MetricSource, SystemAlert } from '@/stores/shrimpSystem'
 import { useShrimpSystemStore } from '@/stores/shrimpSystem'
 
 const store = useShrimpSystemStore()
+const router = useRouter()
 const activeFilter = ref<'全部' | MetricSource>('全部')
 
 const filterOptions: Array<'全部' | MetricSource> = [
@@ -29,6 +31,16 @@ function sourceLabel(source: '全部' | MetricSource) {
   if (source === '机器人状态') return '机器人'
   if (source === '模型评估') return '模型'
   return '全部'
+}
+
+function openAlertCenter(alert: SystemAlert) {
+  router.push({
+    path: '/system/extensions',
+    query: {
+      module: 'alerts',
+      alertId: alert.id,
+    },
+  })
 }
 </script>
 
@@ -62,6 +74,11 @@ function sourceLabel(source: '全部' | MetricSource) {
         :key="alert.id"
         class="message-item"
         :class="{ danger: alert.level === '预警' }"
+        role="button"
+        tabindex="0"
+        @click="openAlertCenter(alert)"
+        @keydown.enter.prevent="openAlertCenter(alert)"
+        @keydown.space.prevent="openAlertCenter(alert)"
       >
         <div class="message-title">
           <strong>{{ alert.type }}</strong>
@@ -229,6 +246,19 @@ function sourceLabel(source: '全部' | MetricSource) {
   background: rgba(8, 30, 78, 0.82);
   border: 1px solid rgba(121, 210, 255, 0.18);
   border-radius: 6px;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.message-item:hover,
+.message-item:focus-visible {
+  background: rgba(14, 48, 120, 0.88);
+  border-color: rgba(121, 210, 255, 0.42);
+  box-shadow: 0 0 16px rgba(91, 214, 255, 0.12);
+  outline: none;
 }
 
 .message-item::before {
