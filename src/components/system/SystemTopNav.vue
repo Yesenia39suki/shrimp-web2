@@ -32,6 +32,10 @@ const activeSection = computed(() => {
     return 'extensions'
   }
 
+  if (route.path.startsWith('/system/history')) {
+    return 'history'
+  }
+
   if (route.path.startsWith('/system/config')) {
     return 'config'
   }
@@ -50,13 +54,13 @@ function updateTime() {
   )}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
 }
 
-function handleOrganizationChange(event: Event) {
-  authStore.switchOrganization((event.target as HTMLSelectElement).value)
-}
-
 function handleLogout() {
   authStore.logout()
   router.replace('/login')
+}
+
+function openHistoryData() {
+  router.push('/system/history')
 }
 
 onMounted(() => {
@@ -154,19 +158,7 @@ onBeforeUnmount(() => {
             {{ authStore.currentRoleText }}
           </span>
         </div>
-        <select
-          :value="authStore.currentOrganization?.id"
-          aria-label="切换当前企业"
-          @change="handleOrganizationChange"
-        >
-          <option
-            v-for="organization in authStore.organizations"
-            :key="organization.id"
-            :value="organization.id"
-          >
-            {{ organization.name }}
-          </option>
-        </select>
+        <button type="button" class="history-button" @click="openHistoryData">历史数据</button>
       </div>
       <button type="button" class="logout-button" @click="handleLogout">退出</button>
     </section>
@@ -481,9 +473,9 @@ onBeforeUnmount(() => {
   min-width: 0;
   height: 46px;
   display: grid;
-  grid-template-columns: minmax(82px, 0.72fr) minmax(126px, 1fr);
+  grid-template-columns: minmax(92px, 1fr) auto;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 5px 7px;
   background: rgba(3, 14, 36, 0.16);
   border: 1px solid rgba(121, 210, 255, 0.18);
@@ -532,14 +524,21 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 10px rgba(255, 111, 125, 0.72);
 }
 
-.user-box select {
-  min-width: 0;
-  height: 30px;
+.history-button {
+  width: 62px;
+  height: 26px;
+  padding: 0;
   color: var(--text-main);
-  font-size: 12px;
+  font-size: 11px;
   background: rgba(3, 14, 36, 0.34);
   border: 1px solid rgba(121, 210, 255, 0.16);
-  outline: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.history-button:hover {
+  border-color: rgba(121, 210, 255, 0.38);
+  box-shadow: 0 0 12px rgba(91, 214, 255, 0.12);
 }
 
 .logout-button {

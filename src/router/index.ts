@@ -8,6 +8,7 @@ import OperationConsoleV5View from '@/views/OperationConsoleV5View.vue'
 import OperationConsoleV6View from '@/views/OperationConsoleV6View.vue'
 import SystemShellLayout from '@/components/system/SystemShellLayout.vue'
 import ExtensionCenterView from '@/views/system/ExtensionCenterView.vue'
+import HistoryDataView from '@/views/system/HistoryDataView.vue'
 import RobotMonitorView from '@/views/system/RobotMonitorView.vue'
 import ShrimpMetricDetailView from '@/views/system/ShrimpMetricDetailView.vue'
 import ShrimpOverviewView from '@/views/system/ShrimpOverviewView.vue'
@@ -89,6 +90,11 @@ const router = createRouter({
           path: 'extensions',
           name: 'system-extensions',
           component: ExtensionCenterView,
+        },
+        {
+          path: 'history',
+          name: 'system-history',
+          component: HistoryDataView,
         },
         {
           path: 'config',
