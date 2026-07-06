@@ -7,7 +7,9 @@ import { useShrimpSystemStore } from '@/stores/shrimpSystem'
 
 const router = useRouter()
 const store = useShrimpSystemStore()
-const currentSpecies = computed(() => store.selectedPondProfile?.species ?? store.shrimpConfig.species)
+const currentSpecies = computed(
+  () => store.selectedPondProfile?.species ?? store.shrimpConfig.species,
+)
 const pondRows = computed(() =>
   store.pondProfiles.map((profile) => {
     const weightMetric = profile.shrimpMetrics.find((metric) => metric.key === 'weight')
@@ -39,10 +41,12 @@ function handlePondChange(event: Event) {
 <template>
   <section class="system-page">
     <div class="page-head">
-      <div>
+      <div class="head-copy">
         <span>虾群参数监测子系统</span>
-        <h1>虾群总览</h1>
-        <p>虾种 {{ currentSpecies }}，模型评估和目标范围共同参与告警判断</p>
+        <div class="headline-row">
+          <h1>虾群总览</h1>
+          <p>虾种 {{ currentSpecies }}，模型评估参与告警判断</p>
+        </div>
       </div>
       <div class="head-actions">
         <label class="pond-switch">
@@ -53,7 +57,10 @@ function handlePondChange(event: Event) {
             </option>
           </select>
         </label>
-        <strong>{{ currentSpecies }} / {{ store.shrimpAlerts.length + store.modelAlerts.length }} 条异常</strong>
+        <strong
+          >{{ currentSpecies }} /
+          {{ store.shrimpAlerts.length + store.modelAlerts.length }} 条异常</strong
+        >
       </div>
     </div>
 
@@ -102,21 +109,40 @@ function handlePondChange(event: Event) {
   box-shadow: 0 14px 30px rgba(8, 24, 65, 0.18);
 }
 
+.head-copy {
+  min-width: 0;
+}
+
 .page-head span {
   color: var(--cyan);
   font-size: 13px;
 }
 
+.headline-row {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 6px;
+}
+
 .page-head h1 {
-  margin: 6px 0 0;
+  flex: 0 0 auto;
+  margin: 0;
   color: var(--text-main);
   font-size: 24px;
+  line-height: 1.08;
 }
 
 .page-head p {
-  margin: 5px 0 0;
+  min-width: 0;
+  margin: 0 0 2px;
   color: var(--text-muted);
   font-size: 12px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .head-actions {

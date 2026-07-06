@@ -181,8 +181,10 @@ watch(
     <section class="water-stage">
       <div class="water-copy">
         <span>水质参数监测子系统</span>
-        <h1>{{ overallState.label }}</h1>
-        <p>{{ overallState.description }}</p>
+        <div class="headline-row">
+          <h1>{{ overallState.label }}</h1>
+          <p>{{ overallState.description }}</p>
+        </div>
       </div>
 
       <div class="stage-tools">
@@ -370,19 +372,32 @@ watch(
   font-size: 13px;
 }
 
+.headline-row {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 5px;
+}
+
 .water-copy h1 {
-  margin: 5px 0 0;
+  flex: 0 0 auto;
+  margin: 0;
   color: var(--text-main);
   font-size: 28px;
   line-height: 1.05;
 }
 
 .water-copy p {
-  max-width: 480px;
-  margin: 5px 0 0;
+  min-width: 0;
+  max-width: 540px;
+  margin: 0 0 2px;
   color: var(--text-muted);
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stage-tools {
@@ -551,18 +566,6 @@ watch(
   gap: 10px;
   padding: 13px;
   overflow: auto;
-}
-
-.metric-cloud-body :deep(.metric-card:nth-child(4n + 2)) {
-  margin-top: 10px;
-}
-
-.metric-cloud-body :deep(.metric-card:nth-child(4n + 3)) {
-  margin-top: 4px;
-}
-
-.metric-cloud-body :deep(.metric-card:nth-child(4n + 4)) {
-  margin-top: 14px;
 }
 
 .analysis-dock {

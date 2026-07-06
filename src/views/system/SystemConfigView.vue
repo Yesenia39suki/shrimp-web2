@@ -4,7 +4,13 @@ import { computed, reactive, ref, watch } from 'vue'
 import { cloneBusinessConfig } from '@/services/mockDataService'
 import { useAuthStore } from '@/stores/authStore'
 import { useShrimpSystemStore } from '@/stores/shrimpSystem'
-import type { BusinessConfig, WaterThresholdMetricKey } from '@/types/business'
+import type {
+  BusinessConfig,
+  Pond,
+  Robot,
+  WaterThreshold,
+  WaterThresholdMetricKey,
+} from '@/types/business'
 
 const authStore = useAuthStore()
 const store = useShrimpSystemStore()
@@ -12,27 +18,29 @@ const store = useShrimpSystemStore()
 const form = reactive<BusinessConfig>(cloneBusinessConfig(store.businessConfig))
 const saveMessage = ref('')
 const activeSection = ref<'pond' | 'robot' | 'threshold' | 'security'>('pond')
+const selectedPondCode = ref(store.pondConfig.selectedPondId)
+const selectedRobotId = ref(store.editableRobots[0]?.id ?? '')
 
 const configSections = [
   {
     id: 'pond',
     title: '池塘信息',
-    description: '编号、名称、品种、面积、水深与位置',
+    description: '基础档案',
   },
   {
     id: 'robot',
     title: '机器人信息',
-    description: '机器人编号、名称、类型与绑定关系',
+    description: '设备档案',
   },
   {
     id: 'threshold',
     title: '水质阈值',
-    description: '温度、溶氧、pH 等上下限',
+    description: '参数上下限',
   },
   {
     id: 'security',
     title: '数据隔离',
-    description: '当前账号、企业、角色和权限状态',
+    description: '账号与权限',
   },
 ] as const
 
@@ -55,10 +63,18 @@ const thresholdFields: Array<{
 const robotTypes = ['投喂巡检型', '水质采样型', '增氧联动型', '料台观察型']
 
 const canEdit = computed(() => authStore.canEditBusinessConfig)
-const permissionText = computed(() =>
-  canEdit.value ? '当前角色可保存配置' : '当前账号仅有查看权限',
-)
+const permissionText = computed(() => (canEdit.value ? '可保存配置' : '当前账号仅有查看权限'))
 const organizationName = computed(() => authStore.currentOrganization?.name ?? '未选择企业')
+const selectedPond = computed(
+  () =>
+    store.editablePonds.find((pond) => pond.pond_code === selectedPondCode.value) ??
+    store.editablePonds[0],
+)
+const selectedRobot = computed(
+  () =>
+    store.editableRobots.find((robot) => robot.id === selectedRobotId.value) ??
+    store.editableRobots[0],
+)
 const activeSectionIndex = computed(() =>
   configSections.findIndex((section) => section.id === activeSection.value),
 )
@@ -67,21 +83,68 @@ const activeSectionInfo = computed(
 )
 
 const summaryCards = computed(() => [
-  { label: '当前企业', value: organizationName.value },
-  { label: '当前用户', value: authStore.currentUser?.display_name ?? '未登录用户' },
-  { label: '当前角色', value: authStore.currentRoleText },
-  { label: '当前池号', value: store.pondConfig.selectedPondId },
-  { label: '异常数量', value: `${store.activeAlertCount} 条` },
+  { label: '企业', value: organizationName.value },
+  { label: '用户', value: authStore.currentUser?.display_name ?? '未登录用户' },
+  { label: '角色', value: authStore.currentRoleText },
+  { label: '池号', value: selectedPondCode.value },
+  { label: '异常', value: `${store.activeAlertCount} 条` },
 ])
 
 watch(
-  () => store.businessConfig,
-  (businessConfig) => {
-    Object.assign(form, cloneBusinessConfig(businessConfig))
+  () => [store.editablePonds, store.editableRobots, store.waterThresholdsByPond],
+  () => {
+    if (!store.editablePonds.some((pond) => pond.pond_code === selectedPondCode.value)) {
+      selectedPondCode.value = store.pondConfig.selectedPondId
+    }
+
+    if (!store.editableRobots.some((robot) => robot.id === selectedRobotId.value)) {
+      selectedRobotId.value = store.editableRobots[0]?.id ?? ''
+    }
+
+    syncFormFromSelection()
     saveMessage.value = ''
   },
   { immediate: true },
 )
+
+watch(selectedPondCode, () => {
+  const robotInPond = store.editableRobots.find((robot) => robot.pond_id === selectedPondCode.value)
+  selectedRobotId.value = robotInPond?.id ?? store.editableRobots[0]?.id ?? ''
+  store.selectPond(selectedPondCode.value)
+  syncFormFromSelection()
+})
+
+watch(selectedRobotId, () => {
+  syncRobotFormFromSelection()
+})
+
+function cloneValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+function syncFormFromSelection() {
+  const pond = selectedPond.value
+  const robot = selectedRobot.value
+
+  if (pond) {
+    form.pond = cloneValue(pond)
+    form.waterThreshold = cloneValue(
+      store.waterThresholdsByPond[pond.pond_code] ?? store.businessConfig.waterThreshold,
+    )
+  }
+
+  if (robot) {
+    form.robot = cloneValue(robot)
+  }
+}
+
+function syncRobotFormFromSelection() {
+  const robot = selectedRobot.value
+
+  if (robot) {
+    form.robot = cloneValue(robot)
+  }
+}
 
 function handleSave() {
   if (!canEdit.value) {
@@ -89,13 +152,72 @@ function handleSave() {
     return
   }
 
-  store.saveBusinessConfig(cloneBusinessConfig(form))
+  const previousPondCode = selectedPondCode.value
+  const nextPondCode = form.pond.pond_code.trim() || previousPondCode
+
+  if (form.robot.pond_id === previousPondCode) {
+    form.robot.pond_id = nextPondCode
+  }
+
+  store.saveEditablePond(cloneValue(form.pond))
+  selectedPondCode.value = nextPondCode
+  store.saveEditableRobot(cloneValue(form.robot))
+  selectedRobotId.value = form.robot.id
+  store.saveEditableThreshold(nextPondCode, cloneValue(form.waterThreshold))
   saveMessage.value = '配置已保存'
 }
 
 function handleReset() {
-  Object.assign(form, cloneBusinessConfig(store.businessConfig))
+  syncFormFromSelection()
   saveMessage.value = ''
+}
+
+function handleAddPond() {
+  if (!canEdit.value) {
+    saveMessage.value = '当前账号仅有查看权限'
+    return
+  }
+
+  const pond = store.addEditablePond()
+  selectedPondCode.value = pond.pond_code
+  syncFormFromSelection()
+  saveMessage.value = '池塘已新增'
+}
+
+function handleDeletePond() {
+  if (!canEdit.value) {
+    saveMessage.value = '当前账号仅有查看权限'
+    return
+  }
+
+  const deleted = store.deleteEditablePond(selectedPondCode.value)
+  selectedPondCode.value = store.pondConfig.selectedPondId
+  syncFormFromSelection()
+  saveMessage.value = deleted ? '池塘已删除' : '至少保留一个池塘'
+}
+
+function handleAddRobot() {
+  if (!canEdit.value) {
+    saveMessage.value = '当前账号仅有查看权限'
+    return
+  }
+
+  const robot = store.addEditableRobot(selectedPondCode.value)
+  selectedRobotId.value = robot.id
+  syncFormFromSelection()
+  saveMessage.value = '机器人已新增'
+}
+
+function handleDeleteRobot() {
+  if (!canEdit.value) {
+    saveMessage.value = '当前账号仅有查看权限'
+    return
+  }
+
+  const deleted = store.deleteEditableRobot(selectedRobotId.value)
+  selectedRobotId.value = store.editableRobots[0]?.id ?? ''
+  syncFormFromSelection()
+  saveMessage.value = deleted ? '机器人已删除' : '至少保留一个机器人'
 }
 
 function goPreviousSection() {
@@ -113,9 +235,8 @@ function goNextSection() {
   <section class="config-page">
     <div class="page-head">
       <div>
-        <span>自定义内容</span>
-        <h1>企业养殖配置</h1>
-        <p>当前配置按企业隔离保存，刷新网页后仍保留本地模拟数据。</p>
+        <span>配置</span>
+        <h1>养殖配置</h1>
       </div>
 
       <div class="page-actions">
@@ -123,7 +244,7 @@ function goNextSection() {
           <strong>{{ organizationName }}</strong>
           <em>{{ authStore.currentRoleText }}</em>
         </div>
-        <button type="button" :disabled="!canEdit" @click="handleSave">保存配置</button>
+        <button type="button" :disabled="!canEdit" @click="handleSave">保存</button>
         <button type="button" class="ghost" @click="handleReset">重置</button>
         <span :class="{ warning: !canEdit, success: saveMessage === '配置已保存' }">
           {{ saveMessage || permissionText }}
@@ -153,6 +274,35 @@ function goNextSection() {
           <div>
             <strong>{{ activeSectionInfo.title }}</strong>
             <span>{{ activeSectionInfo.description }}</span>
+          </div>
+          <div v-if="activeSection === 'pond'" class="panel-tools">
+            <select v-model="selectedPondCode" :disabled="!canEdit">
+              <option v-for="pond in store.editablePonds" :key="pond.id" :value="pond.pond_code">
+                {{ pond.pond_code }} / {{ pond.pond_name }}
+              </option>
+            </select>
+            <button type="button" :disabled="!canEdit" @click="handleAddPond">新增</button>
+            <button type="button" class="danger" :disabled="!canEdit" @click="handleDeletePond">
+              删除
+            </button>
+          </div>
+          <div v-else-if="activeSection === 'robot'" class="panel-tools">
+            <select v-model="selectedRobotId" :disabled="!canEdit">
+              <option v-for="robot in store.editableRobots" :key="robot.id" :value="robot.id">
+                {{ robot.robot_code }} / {{ robot.robot_name }}
+              </option>
+            </select>
+            <button type="button" :disabled="!canEdit" @click="handleAddRobot">新增</button>
+            <button type="button" class="danger" :disabled="!canEdit" @click="handleDeleteRobot">
+              删除
+            </button>
+          </div>
+          <div v-else-if="activeSection === 'threshold'" class="panel-tools">
+            <select v-model="selectedPondCode" :disabled="!canEdit">
+              <option v-for="pond in store.editablePonds" :key="pond.id" :value="pond.pond_code">
+                {{ pond.pond_code }} / {{ pond.pond_name }}
+              </option>
+            </select>
           </div>
           <em>{{ activeSectionIndex + 1 }} / {{ configSections.length }}</em>
         </div>
@@ -206,11 +356,19 @@ function goNextSection() {
               </option>
             </select>
           </label>
+          <label>
+            <span>绑定池塘</span>
+            <select v-model="form.robot.pond_id" :disabled="!canEdit">
+              <option v-for="pond in store.editablePonds" :key="pond.id" :value="pond.pond_code">
+                {{ pond.pond_code }} / {{ pond.pond_name }}
+              </option>
+            </select>
+          </label>
 
           <div class="preview-box wide">
-            <strong>当前绑定关系</strong>
+            <strong>绑定关系</strong>
             <p>企业：{{ organizationName }}</p>
-            <p>虾池：{{ form.pond.pond_code }} / {{ form.pond.pond_name }}</p>
+            <p>虾池：{{ form.robot.pond_id }}</p>
             <p>机器人：{{ form.robot.robot_code }} / {{ form.robot.robot_name }}</p>
           </div>
         </div>
@@ -263,7 +421,7 @@ function goNextSection() {
         <div class="panel-title compact">
           <div>
             <strong>配置摘要</strong>
-            <span>当前企业数据边界</span>
+            <span>数据边界</span>
           </div>
         </div>
 
@@ -275,7 +433,7 @@ function goNextSection() {
         </dl>
 
         <div class="preview-box">
-          <strong>当前编辑对象</strong>
+          <strong>编辑对象</strong>
           <p>{{ form.pond.pond_code }} / {{ form.pond.pond_name }}</p>
           <p>{{ form.robot.robot_code }} / {{ form.robot.robot_name }}</p>
         </div>
@@ -306,25 +464,32 @@ function goNextSection() {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 0 18px;
+  padding: 0 20px 0 22px;
+}
+
+.page-head > div:first-child {
+  min-width: 0;
 }
 
 .page-head span {
+  display: block;
   color: var(--cyan);
   font-size: 13px;
+  line-height: 1.2;
 }
 
 .page-head h1 {
-  margin: 6px 0 0;
+  margin: 7px 0 0;
   color: var(--text-main);
-  font-size: 24px;
+  font-size: 23px;
+  line-height: 1.08;
 }
 
 .page-head p {
-  margin: 5px 0 0;
+  margin: 7px 0 0;
   color: var(--text-muted);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.35;
 }
 
 .page-actions {
@@ -495,9 +660,44 @@ function goNextSection() {
 }
 
 .panel-title em {
+  flex: 0 0 auto;
   color: var(--cyan-soft);
   font-size: 12px;
   font-style: normal;
+}
+
+.panel-tools {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.panel-tools select {
+  width: min(320px, 32vw);
+  height: 30px;
+}
+
+.panel-tools button {
+  height: 30px;
+  padding: 0 12px;
+  color: #dff8ff;
+  background: rgba(3, 14, 36, 0.18);
+  border: 1px solid rgba(121, 210, 255, 0.18);
+  cursor: pointer;
+}
+
+.panel-tools button.danger {
+  color: #ffd5da;
+  border-color: rgba(255, 111, 125, 0.24);
+}
+
+.panel-tools button:disabled {
+  color: rgba(223, 248, 255, 0.42);
+  border-color: rgba(121, 210, 255, 0.08);
+  cursor: not-allowed;
 }
 
 .form-grid {

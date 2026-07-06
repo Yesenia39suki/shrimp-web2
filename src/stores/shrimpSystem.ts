@@ -5,7 +5,7 @@ import {
   getMockSystemData,
   saveBusinessConfig as saveMockBusinessConfig,
 } from '@/services/mockDataService'
-import type { BusinessConfig } from '@/types/business'
+import type { BusinessConfig, Pond, Robot, WaterThreshold } from '@/types/business'
 
 export type MetricSource = '水质参数' | '虾群参数' | '机器人状态' | '模型评估'
 export type AlertLevel = '关注' | '预警'
@@ -64,6 +64,9 @@ export interface PondProfile {
 interface ShrimpSystemState {
   organizationId: string
   businessConfig: BusinessConfig
+  editablePonds: Pond[]
+  editableRobots: Robot[]
+  waterThresholdsByPond: Record<string, WaterThreshold>
   systemMeta: {
     systemName: string
     logoText: string
@@ -105,6 +108,15 @@ interface ShrimpSystemState {
     }>
   }
 }
+
+interface EditableSystemConfig {
+  ponds: Pond[]
+  robots: Robot[]
+  waterThresholdsByPond: Record<string, WaterThreshold>
+  selectedPondId: string
+}
+
+const EDITABLE_SYSTEM_STORAGE_KEY = 'shrimp_editable_system_config'
 
 function buildTrend(value: number, offsets: number[], precision = 1) {
   return offsets.map((offset) => Number((value + offset).toFixed(precision)))
@@ -558,10 +570,155 @@ function metricText(metrics: SystemMetric[], key: string) {
   return String(metrics.find((metric) => metric.key === key)?.value ?? '')
 }
 
+function canUseLocalStorage() {
+  return typeof window !== 'undefined' && Boolean(window.localStorage)
+}
+
+function cloneData<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+function readEditableConfigMap() {
+  if (!canUseLocalStorage()) {
+    return {} as Record<string, EditableSystemConfig>
+  }
+
+  try {
+    return JSON.parse(window.localStorage.getItem(EDITABLE_SYSTEM_STORAGE_KEY) ?? '{}') as Record<
+      string,
+      EditableSystemConfig
+    >
+  } catch {
+    return {}
+  }
+}
+
+function writeEditableConfig(organizationId: string, config: EditableSystemConfig) {
+  if (!canUseLocalStorage()) {
+    return
+  }
+
+  const configs = readEditableConfigMap()
+  configs[organizationId] = cloneData(config)
+  window.localStorage.setItem(EDITABLE_SYSTEM_STORAGE_KEY, JSON.stringify(configs))
+}
+
+function toWaterThreshold(
+  organizationId: string,
+  pondId: string,
+  ranges: Record<string, RangeThreshold>,
+): WaterThreshold {
+  return {
+    id: `threshold-${organizationId}-${pondId}`,
+    organization_id: organizationId,
+    pond_id: pondId,
+    temperature: { ...ranges.temperature! },
+    oxygen: { ...ranges.oxygen! },
+    ph: { ...ranges.ph! },
+    orp: { ...ranges.orp! },
+    turbidity: { ...ranges.turbidity! },
+    ammonia: { ...ranges.ammonia! },
+    nitrite: { ...ranges.nitrite! },
+    hardness: { ...ranges.hardness! },
+  }
+}
+
+function waterThresholdToRangeRecord(threshold: WaterThreshold): Record<string, RangeThreshold> {
+  return {
+    temperature: { ...threshold.temperature },
+    oxygen: { ...threshold.oxygen },
+    ph: { ...threshold.ph },
+    orp: { ...threshold.orp },
+    turbidity: { ...threshold.turbidity },
+    ammonia: { ...threshold.ammonia },
+    nitrite: { ...threshold.nitrite },
+    hardness: { ...threshold.hardness },
+  }
+}
+
+function buildEditablePonds(
+  organizationId: string,
+  systemData: ReturnType<typeof getMockSystemData>,
+) {
+  const primaryPond = systemData.businessConfig.pond
+
+  return systemData.pondProfiles.map((profile, index) => {
+    if (profile.pondId === primaryPond.pond_code || index === 0) {
+      return {
+        ...primaryPond,
+        organization_id: organizationId,
+        pond_code: profile.pondId,
+        shrimp_species: profile.species,
+      }
+    }
+
+    return {
+      id: `pond-${organizationId}-${profile.pondId}`,
+      organization_id: organizationId,
+      pond_code: profile.pondId,
+      pond_name: `${profile.pondId} 号养殖池`,
+      shrimp_species: profile.species,
+      area: Number((primaryPond.area || 20).toFixed(1)),
+      water_depth: Number((primaryPond.water_depth || 1.5).toFixed(2)),
+      location: primaryPond.location,
+    } satisfies Pond
+  })
+}
+
+function buildEditableRobots(
+  organizationId: string,
+  systemData: ReturnType<typeof getMockSystemData>,
+) {
+  const primaryRobot = systemData.businessConfig.robot
+
+  return systemData.robots.map((robot, index) => {
+    if (robot.id === primaryRobot.robot_code || index === 0) {
+      return {
+        ...primaryRobot,
+        organization_id: organizationId,
+        pond_id: robot.pondId,
+        robot_code: robot.id,
+        robot_name: robot.name,
+      }
+    }
+
+    return {
+      id: `robot-${organizationId}-${robot.id}`,
+      organization_id: organizationId,
+      pond_id: robot.pondId,
+      robot_code: robot.id,
+      robot_name: robot.name,
+      robot_type: robot.currentTask.includes('增氧')
+        ? '增氧联动型'
+        : robot.currentTask.includes('采样')
+          ? '水质采样型'
+          : '投喂巡检型',
+    } satisfies Robot
+  })
+}
+
+function buildThresholdsByPond(
+  organizationId: string,
+  pondIds: string[],
+  baseRanges: Record<string, RangeThreshold>,
+) {
+  return pondIds.reduce<Record<string, WaterThreshold>>((result, pondId) => {
+    result[pondId] = toWaterThreshold(organizationId, pondId, baseRanges)
+    return result
+  }, {})
+}
+
 export const useShrimpSystemStore = defineStore('shrimpSystem', {
   state: (): ShrimpSystemState => ({
     organizationId: defaultOrganizationId,
     businessConfig: defaultSystemData.businessConfig,
+    editablePonds: buildEditablePonds(defaultOrganizationId, defaultSystemData),
+    editableRobots: buildEditableRobots(defaultOrganizationId, defaultSystemData),
+    waterThresholdsByPond: buildThresholdsByPond(
+      defaultOrganizationId,
+      defaultSystemData.pondConfig.pondIds,
+      defaultSystemData.thresholds.water,
+    ),
     systemMeta: {
       systemName: '虾群养殖投喂系统',
       logoText: 'UpcShrimpFeeding',
@@ -766,6 +923,29 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
   actions: {
     loadOrganizationData(organizationId: string) {
       const systemData = getMockSystemData(organizationId)
+      const savedEditableConfig = readEditableConfigMap()[organizationId]
+      const defaultPonds = buildEditablePonds(organizationId, systemData)
+      const defaultRobots = buildEditableRobots(organizationId, systemData)
+      const defaultThresholdsByPond = buildThresholdsByPond(
+        organizationId,
+        defaultPonds.map((pond) => pond.pond_code),
+        systemData.thresholds.water,
+      )
+      const editablePonds = savedEditableConfig?.ponds?.length
+        ? savedEditableConfig.ponds
+        : defaultPonds
+      const editableRobots = savedEditableConfig?.robots?.length
+        ? savedEditableConfig.robots
+        : defaultRobots
+      const waterThresholdsByPond = {
+        ...defaultThresholdsByPond,
+        ...(savedEditableConfig?.waterThresholdsByPond ?? {}),
+      }
+      const selectedPondId =
+        savedEditableConfig?.selectedPondId &&
+        editablePonds.some((pond) => pond.pond_code === savedEditableConfig.selectedPondId)
+          ? savedEditableConfig.selectedPondId
+          : editablePonds[0]?.pond_code
 
       this.organizationId = organizationId
       this.businessConfig = systemData.businessConfig
@@ -778,15 +958,243 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       this.pondConfig = systemData.pondConfig
       this.shrimpConfig = systemData.shrimpConfig
       this.robotConfig = systemData.robotConfig
-      this.selectPond(systemData.pondConfig.selectedPondId)
+      this.editablePonds = cloneData(editablePonds)
+      this.editableRobots = cloneData(editableRobots)
+      this.waterThresholdsByPond = cloneData(waterThresholdsByPond)
+      this.rebuildEditableRuntime(selectedPondId ?? systemData.pondConfig.selectedPondId)
     },
     saveBusinessConfig(config: BusinessConfig) {
       saveMockBusinessConfig(this.organizationId, config)
       this.loadOrganizationData(this.organizationId)
     },
+    persistEditableRuntime() {
+      writeEditableConfig(this.organizationId, {
+        ponds: this.editablePonds,
+        robots: this.editableRobots,
+        waterThresholdsByPond: this.waterThresholdsByPond,
+        selectedPondId: this.pondConfig.selectedPondId,
+      })
+    },
+    rebuildEditableRuntime(selectedPondId?: string) {
+      const fallbackProfile = this.pondProfiles[0]
+      const profileByPondId = new Map(this.pondProfiles.map((profile) => [profile.pondId, profile]))
+      const robotByCode = new Map(this.robots.map((robot) => [robot.id, robot]))
+      const pondCodes = this.editablePonds.map((pond) => pond.pond_code)
+      const resolvedSelectedPondId =
+        selectedPondId && pondCodes.includes(selectedPondId)
+          ? selectedPondId
+          : (pondCodes[0] ?? this.pondConfig.selectedPondId)
+
+      this.pondProfiles = this.editablePonds.map((pond, index) => {
+        const sourceProfile = profileByPondId.get(pond.pond_code) ?? fallbackProfile
+
+        return {
+          pondId: pond.pond_code,
+          species: pond.shrimp_species,
+          systemStatus: sourceProfile?.systemStatus ?? '运行稳定',
+          waterMetrics: cloneMetrics(sourceProfile?.waterMetrics ?? []),
+          shrimpMetrics: cloneMetrics(sourceProfile?.shrimpMetrics ?? []),
+        }
+      })
+
+      this.robots = this.editableRobots.map((robot) => {
+        const sourceRobot = robotByCode.get(robot.robot_code)
+
+        return {
+          id: robot.robot_code,
+          name: robot.robot_name,
+          online: sourceRobot?.online ?? true,
+          pondId: robot.pond_id,
+          currentTask: sourceRobot?.currentTask ?? `${robot.robot_type}待命`,
+          battery: sourceRobot?.battery ?? 80,
+          feederStatus: sourceRobot?.feederStatus ?? '正常',
+          motionStatus: sourceRobot?.motionStatus ?? '待命',
+          lastRunAt: sourceRobot?.lastRunAt ?? '今日 09:00',
+          nextPlanAt: sourceRobot?.nextPlanAt ?? '今日 12:00',
+          abnormalStatus: sourceRobot?.abnormalStatus ?? '无',
+          commands: sourceRobot?.commands ?? ['09:00 同步本地配置'],
+        }
+      })
+
+      this.pondConfig = {
+        pondIds: this.pondProfiles.map((profile) => profile.pondId),
+        selectedPondId: resolvedSelectedPondId,
+      }
+      this.robotConfig = {
+        robots: this.robots.map((robot) => ({
+          id: robot.id,
+          name: robot.name,
+          pondId: robot.pondId,
+        })),
+      }
+
+      const selectedPond = this.editablePonds.find(
+        (pond) => pond.pond_code === resolvedSelectedPondId,
+      )
+      const selectedRobot =
+        this.editableRobots.find((robot) => robot.pond_id === resolvedSelectedPondId) ??
+        this.editableRobots[0]
+      const selectedThreshold =
+        this.waterThresholdsByPond[resolvedSelectedPondId] ??
+        toWaterThreshold(this.organizationId, resolvedSelectedPondId, this.thresholds.water)
+
+      if (selectedPond && selectedRobot) {
+        this.businessConfig = {
+          organization_id: this.organizationId,
+          pond: cloneData(selectedPond),
+          robot: cloneData(selectedRobot),
+          waterThreshold: cloneData(selectedThreshold),
+        }
+      }
+
+      this.thresholds = {
+        ...this.thresholds,
+        water: waterThresholdToRangeRecord(selectedThreshold),
+      }
+      this.selectPond(resolvedSelectedPondId)
+    },
+    saveEditablePond(pond: Pond) {
+      const previousPond = this.editablePonds.find((item) => item.id === pond.id)
+      const previousPondCode = previousPond?.pond_code
+      const normalizedPond = {
+        ...pond,
+        organization_id: this.organizationId,
+        pond_code: pond.pond_code.trim() || `P-${this.editablePonds.length + 1}`,
+        pond_name: pond.pond_name.trim() || '未命名养殖池',
+        shrimp_species: pond.shrimp_species.trim() || '南美白对虾',
+        location: pond.location.trim() || '未设置',
+      }
+
+      this.editablePonds = this.editablePonds.map((item) =>
+        item.id === normalizedPond.id ? normalizedPond : item,
+      )
+
+      if (previousPondCode && previousPondCode !== normalizedPond.pond_code) {
+        this.editableRobots = this.editableRobots.map((robot) =>
+          robot.pond_id === previousPondCode
+            ? { ...robot, pond_id: normalizedPond.pond_code }
+            : robot,
+        )
+        this.waterThresholdsByPond[normalizedPond.pond_code] =
+          this.waterThresholdsByPond[previousPondCode] ??
+          toWaterThreshold(this.organizationId, normalizedPond.pond_code, this.thresholds.water)
+        delete this.waterThresholdsByPond[previousPondCode]
+      }
+
+      this.rebuildEditableRuntime(normalizedPond.pond_code)
+      this.persistEditableRuntime()
+    },
+    addEditablePond() {
+      const nextIndex = this.editablePonds.length + 1
+      const pondCode = `P-${String(nextIndex).padStart(2, '0')}`
+      const pond: Pond = {
+        id: `pond-${this.organizationId}-${Date.now()}`,
+        organization_id: this.organizationId,
+        pond_code: pondCode,
+        pond_name: `新增养殖池 ${nextIndex}`,
+        shrimp_species: '南美白对虾',
+        area: 20,
+        water_depth: 1.5,
+        location: '未设置',
+      }
+
+      this.editablePonds.push(pond)
+      this.waterThresholdsByPond[pondCode] = toWaterThreshold(
+        this.organizationId,
+        pondCode,
+        this.thresholds.water,
+      )
+      this.rebuildEditableRuntime(pondCode)
+      this.persistEditableRuntime()
+      return pond
+    },
+    deleteEditablePond(pondCode: string) {
+      if (this.editablePonds.length <= 1) {
+        return false
+      }
+
+      this.editablePonds = this.editablePonds.filter((pond) => pond.pond_code !== pondCode)
+      this.editableRobots = this.editableRobots.filter((robot) => robot.pond_id !== pondCode)
+      delete this.waterThresholdsByPond[pondCode]
+
+      if (this.editableRobots.length === 0 && this.editablePonds[0]) {
+        this.editableRobots.push({
+          id: `robot-${this.organizationId}-${Date.now()}`,
+          organization_id: this.organizationId,
+          pond_id: this.editablePonds[0].pond_code,
+          robot_code: 'RB-01',
+          robot_name: '默认投喂机器人',
+          robot_type: '投喂巡检型',
+        })
+      }
+
+      this.rebuildEditableRuntime(this.editablePonds[0]?.pond_code)
+      this.persistEditableRuntime()
+      return true
+    },
+    saveEditableRobot(robot: Robot) {
+      const normalizedRobot = {
+        ...robot,
+        organization_id: this.organizationId,
+        robot_code: robot.robot_code.trim() || `RB-${this.editableRobots.length + 1}`,
+        robot_name: robot.robot_name.trim() || '未命名机器人',
+        robot_type: robot.robot_type.trim() || '投喂巡检型',
+        pond_id: robot.pond_id || this.pondConfig.selectedPondId,
+      }
+
+      this.editableRobots = this.editableRobots.map((item) =>
+        item.id === normalizedRobot.id ? normalizedRobot : item,
+      )
+      this.rebuildEditableRuntime(normalizedRobot.pond_id)
+      this.persistEditableRuntime()
+    },
+    addEditableRobot(pondCode?: string) {
+      const nextIndex = this.editableRobots.length + 1
+      const robot: Robot = {
+        id: `robot-${this.organizationId}-${Date.now()}`,
+        organization_id: this.organizationId,
+        pond_id: pondCode ?? this.pondConfig.selectedPondId,
+        robot_code: `RB-${String(nextIndex).padStart(2, '0')}`,
+        robot_name: `新增机器人 ${nextIndex}`,
+        robot_type: '投喂巡检型',
+      }
+
+      this.editableRobots.push(robot)
+      this.rebuildEditableRuntime(robot.pond_id)
+      this.persistEditableRuntime()
+      return robot
+    },
+    deleteEditableRobot(robotId: string) {
+      if (this.editableRobots.length <= 1) {
+        return false
+      }
+
+      const robot = this.editableRobots.find((item) => item.id === robotId)
+      this.editableRobots = this.editableRobots.filter((item) => item.id !== robotId)
+      this.rebuildEditableRuntime(robot?.pond_id ?? this.pondConfig.selectedPondId)
+      this.persistEditableRuntime()
+      return true
+    },
+    saveEditableThreshold(pondCode: string, threshold: WaterThreshold) {
+      this.waterThresholdsByPond[pondCode] = {
+        ...threshold,
+        organization_id: this.organizationId,
+        pond_id: pondCode,
+      }
+      this.rebuildEditableRuntime(pondCode)
+      this.persistEditableRuntime()
+    },
     selectPond(pondId: string) {
       this.pondConfig.selectedPondId = pondId
       this.systemMeta.currentPondId = pondId
+      const threshold = this.waterThresholdsByPond[pondId]
+
+      if (threshold) {
+        this.thresholds = {
+          ...this.thresholds,
+          water: waterThresholdToRangeRecord(threshold),
+        }
+      }
 
       const profile = this.pondProfiles.find((item) => item.pondId === pondId)
 

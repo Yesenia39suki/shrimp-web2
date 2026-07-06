@@ -77,7 +77,7 @@ onBeforeUnmount(() => {
       <span class="logo-mark"><i></i></span>
       <span class="logo-copy">
         <strong>{{ store.systemMeta.logoText }}</strong>
-        <em>虾群养殖投喂系统</em>
+        <em>投喂管理系统</em>
       </span>
     </RouterLink>
 
@@ -204,17 +204,22 @@ onBeforeUnmount(() => {
 
 .logo-link {
   min-width: 0;
+  height: 54px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
+  padding: 0 10px 0 4px;
   color: var(--text-main);
   text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: 14px;
 }
 
 .logo-mark {
   position: relative;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
   display: grid;
   place-items: center;
   border: 1px solid rgba(121, 210, 255, 0.82);
@@ -234,17 +239,17 @@ onBeforeUnmount(() => {
 }
 
 .logo-mark::before {
-  inset: -5px;
+  inset: -4px;
 }
 
 .logo-mark::after {
-  inset: 7px;
+  inset: 8px;
   transform: rotate(45deg);
 }
 
 .logo-mark i {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border: 3px solid #7aeec3;
   border-right-color: #5bd6ff;
   border-radius: 50%;
@@ -253,14 +258,17 @@ onBeforeUnmount(() => {
 .logo-copy {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: 4px;
+  align-content: center;
+  transform: translateY(-1px);
 }
 
 .logo-link strong {
   overflow: hidden;
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 800;
   letter-spacing: 0;
+  line-height: 1.05;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -268,8 +276,9 @@ onBeforeUnmount(() => {
 .logo-link em {
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 11.5px;
   font-style: normal;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

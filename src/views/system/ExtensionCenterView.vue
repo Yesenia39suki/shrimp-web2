@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 
-import { getAlerts } from '@/services/alertService'
 import {
   explainAlert,
   requestFeedingAdvice,
@@ -31,7 +30,7 @@ import { getThresholds } from '@/services/thresholdService'
 import { getLatestWaterData } from '@/services/waterDataService'
 import { useAuthStore } from '@/stores/authStore'
 import { useShrimpSystemStore } from '@/stores/shrimpSystem'
-import type { Alert } from '@/types/alert'
+import type { SystemAlert } from '@/stores/shrimpSystem'
 import type {
   AiFeedingAdviceResult,
   AiModelConfig,
@@ -59,7 +58,6 @@ const riskResult = ref<RiskCalculationResult | null>(null)
 const feedingPlans = ref<FeedingPlan[]>([])
 const feedingTasks = ref<FeedingTask[]>([])
 const feedingRecords = ref<FeedingRecord[]>([])
-const alerts = ref<Alert[]>([])
 const devices = ref<Device[]>([])
 const aiLogs = ref<AiRequestLog[]>([])
 const alertExplanation = ref('')
@@ -100,9 +98,8 @@ const pondId = computed(() => systemStore.pondConfig.selectedPondId)
 const robotId = computed(() => systemStore.robots[0]?.id ?? '')
 const currentRobot = computed(() => systemStore.robots.find((robot) => robot.id === robotId.value))
 const canOperate = computed(() => authStore.currentRole !== 'viewer')
-const permissionText = computed(() =>
-  canOperate.value ? '当前角色可操作扩展模块' : '当前账号仅有查看权限',
-)
+const permissionText = computed(() => (canOperate.value ? '可操作' : '当前账号仅有查看权限'))
+const alerts = computed(() => systemStore.allAlerts)
 
 const moduleCards = computed(() => [
   {
@@ -111,38 +108,38 @@ const moduleCards = computed(() => [
     value: robotPosition.value
       ? `${robotPosition.value.x.toFixed(1)}, ${robotPosition.value.z.toFixed(1)}`
       : '等待坐标',
-    desc: '小车位置、轨迹、电量、速度',
+    desc: '位置与轨迹',
   },
   {
     id: 'ai' as const,
     title: 'AI 决策中心',
     value: riskResult.value ? `${riskResult.value.totalRiskScore} 分` : '待评估',
-    desc: '风险评分、投喂建议、采纳反馈',
+    desc: '评分与建议',
   },
   {
     id: 'model' as const,
     title: 'AI 模型设置',
     value:
       providerOptions.find((item) => item.value === modelConfig.providerType)?.label ?? '未设置',
-    desc: '模型来源、输出格式、调用限制',
+    desc: '来源与限制',
   },
   {
     id: 'feeding' as const,
     title: '投喂计划管理',
     value: `${feedingTasks.value.length} 个任务`,
-    desc: '计划、今日任务、历史记录',
+    desc: '计划与记录',
   },
   {
     id: 'alerts' as const,
     title: '报警中心',
-    value: `${alerts.value.filter((alert) => alert.readStatus === 'unread').length} 条未读`,
-    desc: '报警列表、处理状态、AI 解释',
+    value: `${alerts.value.length} 条异常`,
+    desc: '报警与处理',
   },
   {
     id: 'devices' as const,
     title: '设备管理',
     value: `${devices.value.length} 台设备`,
-    desc: '传感器、网关、机器人心跳',
+    desc: '设备与心跳',
   },
 ])
 
@@ -197,7 +194,6 @@ async function loadExtensionData() {
       plans,
       tasks,
       records,
-      nextAlerts,
       nextDevices,
       logs,
       latestWater,
@@ -217,7 +213,6 @@ async function loadExtensionData() {
       getFeedingPlans(organizationId.value, pondId.value),
       getTodayFeedingTasks(organizationId.value, pondId.value),
       getFeedingRecords(organizationId.value, pondId.value, timeRange.value),
-      getAlerts(organizationId.value, { pondId: pondId.value }),
       getDevices(organizationId.value),
       loadAiRequestLogs(organizationId.value),
       getLatestWaterData(organizationId.value, pondId.value),
@@ -234,7 +229,6 @@ async function loadExtensionData() {
     feedingPlans.value = plans
     feedingTasks.value = tasks
     feedingRecords.value = records
-    alerts.value = nextAlerts
     devices.value = nextDevices
     aiLogs.value = logs
     riskResult.value = calculateTotalRisk({
@@ -283,7 +277,7 @@ async function handleRobotCommand(type: RobotCommandType) {
     targetId: robotId.value,
     detail: `mock 指令：${type}`,
   })
-  actionMessage.value = '机器人指令已进入 mock 队列'
+  actionMessage.value = '指令已下发'
 }
 
 async function handleAiFeedback(accepted: boolean) {
@@ -303,7 +297,7 @@ async function handleAiFeedback(accepted: boolean) {
     targetId: pondId.value,
     detail: aiAdvice.value?.summary,
   })
-  actionMessage.value = accepted ? '已记录采纳反馈' : '已记录不采纳反馈'
+  actionMessage.value = accepted ? '已采纳' : '已记录反馈'
 }
 
 async function handleTestModel() {
@@ -325,8 +319,8 @@ async function handleSaveModel() {
   actionMessage.value = '模型配置已保存'
 }
 
-async function handleExplainAlert(alert: Alert) {
-  const result = await explainAlert(organizationId.value, alert.pondId ?? pondId.value, alert.id, {
+async function handleExplainAlert(alert: SystemAlert) {
+  const result = await explainAlert(organizationId.value, pondId.value, alert.id, {
     providerType: modelConfig.providerType,
   })
   alertExplanation.value = result.summary
@@ -352,14 +346,16 @@ onBeforeUnmount(() => {
 <template>
   <section class="extension-page">
     <header class="extension-head">
-      <div>
-        <span>扩展接口中心</span>
-        <h1>数据库、硬件、AI 与 3D 接口预留</h1>
-        <p>当前使用 mock/localStorage 数据，后续统一替换 Supabase、Edge Functions 和硬件数据源。</p>
+      <div class="head-copy">
+        <span>接口中心</span>
+        <div class="headline-row">
+          <h1>扩展接口预留</h1>
+          <p>mock 数据，后续接入数据库、硬件和 AI</p>
+        </div>
       </div>
       <div class="tenant-status">
         <strong>{{ organizationName }}</strong>
-        <em>{{ pondId }} / {{ currentRobot?.name ?? '未选择机器人' }}</em>
+        <em>{{ pondId }} / {{ currentRobot?.id ?? '未选择机器人' }}</em>
         <span :class="{ warning: !canOperate }">{{ actionMessage || permissionText }}</span>
       </div>
     </header>
@@ -381,7 +377,7 @@ onBeforeUnmount(() => {
     <section class="module-panel">
       <div class="panel-toolbar">
         <strong>{{ moduleCards.find((module) => module.id === activeModule)?.title }}</strong>
-        <span>{{ loading ? '加载 mock 数据中' : 'mock 接口已就绪' }}</span>
+        <span>{{ loading ? '加载中' : '已就绪' }}</span>
       </div>
 
       <div v-if="activeModule === 'scene3d'" class="scene-layout">
@@ -400,7 +396,7 @@ onBeforeUnmount(() => {
 
         <aside class="detail-stack">
           <article>
-            <span>当前坐标</span>
+            <span>坐标</span>
             <strong>
               X {{ robotPosition?.x.toFixed(1) ?? '-' }} / Y
               {{ robotPosition?.y.toFixed(1) ?? '-' }} / Z {{ robotPosition?.z.toFixed(1) ?? '-' }}
@@ -479,14 +475,14 @@ onBeforeUnmount(() => {
           <input v-model.trim="modelConfig.modelName" type="text" />
         </label>
         <label>
-          <span>自研模型 endpointUrl</span>
+          <span>自研 endpoint</span>
           <input
             v-model.trim="modelConfig.endpointUrl"
             :disabled="
               modelConfig.providerType !== 'local_model' && modelConfig.providerType !== 'hybrid'
             "
             type="text"
-            placeholder="后续由后端调用自研模型服务"
+            placeholder="后端调用"
           />
         </label>
         <label>
@@ -536,15 +532,21 @@ onBeforeUnmount(() => {
 
       <div v-else-if="activeModule === 'alerts'" class="list-layout">
         <article v-for="alert in alerts" :key="alert.id">
-          <span>{{ alert.type }} / {{ alert.level }} / {{ alert.readStatus }}</span>
-          <strong>{{ alert.title }}</strong>
-          <p>{{ alert.content }}</p>
+          <span>{{ alert.source }} / {{ alert.level }} / {{ alert.time }}</span>
+          <strong>{{ alert.type }}</strong>
+          <p>{{ alert.reason }}</p>
+          <p>当前值：{{ alert.currentValue }} / 正常范围：{{ alert.normalRange }}</p>
           <button type="button" @click="handleExplainAlert(alert)">AI 解释报警</button>
+        </article>
+        <article v-if="alerts.length === 0">
+          <span>报警中心</span>
+          <strong>当前没有异常</strong>
+          <p>与顶部告警系统同步。</p>
         </article>
         <article v-if="alertExplanation">
           <span>AI 解释结果</span>
           <strong>{{ alertExplanation }}</strong>
-          <p>当前为 mock 结构化解释，正式接入后将由后端 Edge Function 调用模型。</p>
+          <p>mock 解释，后续由后端调用模型。</p>
         </article>
       </div>
 
@@ -565,7 +567,7 @@ onBeforeUnmount(() => {
 .extension-page {
   height: 100%;
   display: grid;
-  grid-template-rows: 78px 112px minmax(0, 1fr);
+  grid-template-rows: 74px 112px minmax(0, 1fr);
   gap: 12px;
   overflow: hidden;
 }
@@ -587,6 +589,10 @@ onBeforeUnmount(() => {
   padding: 0 18px;
 }
 
+.head-copy {
+  min-width: 0;
+}
+
 .extension-head span,
 .module-grid span,
 .panel-toolbar span,
@@ -594,18 +600,34 @@ article span,
 label span {
   color: var(--cyan);
   font-size: 12px;
+  line-height: 1.2;
 }
 
 .extension-head h1 {
-  margin: 6px 0 0;
+  flex: 0 0 auto;
+  margin: 0;
   color: var(--text-main);
   font-size: 24px;
+  line-height: 1.08;
 }
 
 .extension-head p {
-  margin: 5px 0 0;
+  min-width: 0;
+  margin: 0 0 2px;
   color: var(--text-muted);
   font-size: 12px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headline-row {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 6px;
 }
 
 .tenant-status {
@@ -716,7 +738,7 @@ article p,
 }
 
 .scene-map::before {
-  content: '3D 场景占位：后续接 glb/gltf 模型、小车轨迹线和实时坐标';
+  content: '3D 占位：模型、轨迹、坐标';
   position: absolute;
   left: 16px;
   top: 14px;

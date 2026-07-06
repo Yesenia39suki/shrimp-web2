@@ -11,10 +11,12 @@ function getRobotAlerts(robotId: string) {
 <template>
   <section class="robot-page">
     <div class="page-head">
-      <div>
+      <div class="head-copy">
         <span>机器人实时监测</span>
-        <h1>机器人状态与指令记录</h1>
-        <p>在线状态、任务执行、电量、投喂机与最近指令统一监测</p>
+        <div class="headline-row">
+          <h1>机器人监测</h1>
+          <p>在线、任务、电量与指令记录</p>
+        </div>
       </div>
       <strong>{{ store.robotAlerts.length }} 条机器人异常</strong>
     </div>
@@ -111,7 +113,12 @@ function getRobotAlerts(robotId: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   padding: 0 18px;
+}
+
+.head-copy {
+  min-width: 0;
 }
 
 .page-head span {
@@ -119,20 +126,35 @@ function getRobotAlerts(robotId: string) {
   font-size: 13px;
 }
 
+.headline-row {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 6px;
+}
+
 .page-head h1 {
-  margin: 6px 0 0;
+  flex: 0 0 auto;
+  margin: 0;
   color: var(--text-main);
   font-size: 24px;
+  line-height: 1.08;
 }
 
 .page-head p {
-  margin: 5px 0 0;
+  min-width: 0;
+  margin: 0 0 2px;
   color: var(--text-muted);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .page-head strong {
+  flex: 0 0 auto;
   padding: 8px 12px;
   color: var(--warning);
   font-size: 14px;
