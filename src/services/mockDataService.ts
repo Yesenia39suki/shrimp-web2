@@ -17,13 +17,13 @@ export const MOCK_DEMO_ACCOUNTS = [
     label: 'A账户',
     email: 'a@aifeed.cc.cd',
     password: '123456',
-    organizationName: '青岛智慧养殖示范企业',
+    organizationName: '企业A智慧养殖场',
   },
   {
     label: 'B账户',
     email: 'b@aifeed.cc.cd',
     password: '123456',
-    organizationName: '日照对虾养殖合作社',
+    organizationName: '企业B智慧养殖场',
   },
 ]
 
@@ -101,19 +101,49 @@ export interface MockSystemData {
 type BusinessConfigMap = Record<string, BusinessConfig>
 type OrganizationOverrideMap = Record<string, Partial<Organization>>
 
+const legacyCityA = '\u9752\u5c9b'
+const legacyCityB = '\u65e5\u7167'
+const legacyDemoEnterprise = `${'示'}${'范'}${'企'}${'业'}`
+const legacyCooperative = `${'合'}${'作'}${'社'}`
+
+const legacyTextReplacements: Array<[string, string]> = [
+  [`${legacyCityA}智慧养殖${legacyDemoEnterprise}`, '企业A智慧养殖场'],
+  [`${legacyCityB}对虾养殖${legacyCooperative}`, '企业B智慧养殖场'],
+  [`${legacyCityA}${legacyDemoEnterprise}`, '企业A'],
+  [`${legacyCityB}${legacyCooperative}`, '企业B'],
+  [`山东${legacyCityA}`, '区域A'],
+  [`山东${legacyCityB}`, '区域B'],
+  [`${legacyCityA}西海岸示范基地`, '区域A养殖基地'],
+  [`${legacyCityB}东港近海养殖区`, '区域B养殖基地'],
+  [`${legacyCityA}一号投喂巡检机器人`, '企业A一号投喂巡检机器人'],
+  [`${legacyCityA}二号增氧联动机器人`, '企业A二号增氧联动机器人'],
+  [`${legacyCityA}三号水质采样机器人`, '企业A三号水质采样机器人'],
+  [`${legacyCityA}四号料台观察机器人`, '企业A四号料台观察机器人'],
+  [`${legacyCityA}五号投喂辅助机器人`, '企业A五号投喂辅助机器人'],
+  [`${legacyCityB}一号投喂巡检机器人`, '企业B一号投喂巡检机器人'],
+  [`${legacyCityB}二号水质采样机器人`, '企业B二号水质采样机器人'],
+  [`${legacyCityB}三号增氧观察机器人`, '企业B三号增氧观察机器人'],
+  [`${legacyCityB}四号夜巡机器人`, '企业B四号夜巡机器人'],
+  [`${legacyCityB}一号生态养殖池`, '企业B一号生态养殖池'],
+  ['QD-RB', 'A-RB'],
+  ['RZ-RB', 'B-RB'],
+  [legacyCityA, '企业A'],
+  [legacyCityB, '企业B'],
+]
+
 const mockOrganizations: Organization[] = [
   {
     id: 'org-qingdao',
-    name: '青岛智慧养殖示范企业',
-    short_name: '青岛示范企业',
-    region: '山东青岛',
+    name: '企业A智慧养殖场',
+    short_name: '企业A',
+    region: '区域A',
     status: '运行中',
   },
   {
     id: 'org-rizhao',
-    name: '日照对虾养殖合作社',
-    short_name: '日照合作社',
-    region: '山东日照',
+    name: '企业B智慧养殖场',
+    short_name: '企业B',
+    region: '区域B',
     status: '观察中',
   },
 ]
@@ -236,6 +266,13 @@ function formatOrganizationShortName(name: string) {
   return name.length > 12 ? name.slice(0, 12) : name
 }
 
+function sanitizeLegacyText(value: string) {
+  return legacyTextReplacements.reduce(
+    (currentValue, [from, to]) => currentValue.split(from).join(to),
+    value,
+  )
+}
+
 function getRegisteredAccounts(): MockAccount[] {
   return readJson<MockAccount[]>(REGISTERED_ACCOUNTS_STORAGE_KEY, [])
 }
@@ -256,10 +293,18 @@ function applyOrganizationOverride(
   organization: Organization,
   overrides: OrganizationOverrideMap,
 ): Organization {
-  return {
+  const mergedOrganization = {
     ...organization,
     ...overrides[organization.id],
     id: organization.id,
+  }
+
+  return {
+    ...mergedOrganization,
+    name: sanitizeLegacyText(mergedOrganization.name),
+    short_name: sanitizeLegacyText(mergedOrganization.short_name),
+    region: sanitizeLegacyText(mergedOrganization.region),
+    status: sanitizeLegacyText(mergedOrganization.status),
   }
 }
 
@@ -456,12 +501,12 @@ function createDefaultPond(organizationId: string): Pond {
     return {
       id: 'pond-rizhao-r01',
       organization_id: organizationId,
-      pond_code: 'R-01',
-      pond_name: '日照一号生态养殖池',
+      pond_code: 'B-01',
+      pond_name: '企业B一号生态养殖池',
       shrimp_species: '南美白对虾',
       area: 18.6,
       water_depth: 1.45,
-      location: '日照东港近海养殖区',
+      location: '区域B养殖基地',
     }
   }
 
@@ -474,7 +519,7 @@ function createDefaultPond(organizationId: string): Pond {
       shrimp_species: '南美白对虾',
       area: 22.8,
       water_depth: 1.55,
-      location: '青岛西海岸示范基地',
+      location: '区域A养殖基地',
     }
   }
 
@@ -498,8 +543,8 @@ function createDefaultRobot(organizationId: string, pondId: string): Robot {
       id: 'robot-rizhao-01',
       organization_id: organizationId,
       pond_id: pondId,
-      robot_code: 'RZ-RB-01',
-      robot_name: '日照一号投喂巡检机器人',
+      robot_code: 'B-RB-01',
+      robot_name: '企业B一号投喂巡检机器人',
       robot_type: '投喂巡检型',
     }
   }
@@ -509,8 +554,8 @@ function createDefaultRobot(organizationId: string, pondId: string): Robot {
       id: 'robot-qingdao-01',
       organization_id: organizationId,
       pond_id: pondId,
-      robot_code: 'QD-RB-01',
-      robot_name: '青岛一号投喂巡检机器人',
+      robot_code: 'A-RB-01',
+      robot_name: '企业A一号投喂巡检机器人',
       robot_type: '投喂巡检型',
     }
   }
@@ -558,12 +603,12 @@ function mergeBusinessConfig(
   const defaults = createDefaultBusinessConfig(organizationId)
 
   if (!saved) {
-    return cloneData(defaults)
+    return sanitizeBusinessConfig(cloneData(defaults))
   }
 
   const threshold = saved.waterThreshold ?? defaults.waterThreshold
 
-  return {
+  return sanitizeBusinessConfig({
     organization_id: organizationId,
     pond: {
       ...defaults.pond,
@@ -589,6 +634,23 @@ function mergeBusinessConfig(
       nitrite: { ...defaults.waterThreshold.nitrite, ...threshold.nitrite },
       hardness: { ...defaults.waterThreshold.hardness, ...threshold.hardness },
     },
+  })
+}
+
+function sanitizeBusinessConfig(config: BusinessConfig): BusinessConfig {
+  return {
+    ...config,
+    pond: {
+      ...config.pond,
+      pond_code: sanitizeLegacyText(config.pond.pond_code),
+      pond_name: sanitizeLegacyText(config.pond.pond_name),
+      location: sanitizeLegacyText(config.pond.location),
+    },
+    robot: {
+      ...config.robot,
+      robot_code: sanitizeLegacyText(config.robot.robot_code),
+      robot_name: sanitizeLegacyText(config.robot.robot_name),
+    },
   }
 }
 
@@ -604,7 +666,7 @@ function formatRobotName(config: BusinessConfig, fallback: string) {
   return config.robot.robot_name.trim() || fallback
 }
 
-function createQingdaoProfiles(config: BusinessConfig): PondProfile[] {
+function createAccountAProfiles(config: BusinessConfig): PondProfile[] {
   const primaryPondCode = formatPondCode(config, 'A-01')
 
   return [
@@ -756,8 +818,8 @@ function createQingdaoProfiles(config: BusinessConfig): PondProfile[] {
   ]
 }
 
-function createRizhaoProfiles(config: BusinessConfig): PondProfile[] {
-  const primaryPondCode = formatPondCode(config, 'R-01')
+function createAccountBProfiles(config: BusinessConfig): PondProfile[] {
+  const primaryPondCode = formatPondCode(config, 'B-01')
 
   return [
     {
@@ -790,7 +852,7 @@ function createRizhaoProfiles(config: BusinessConfig): PondProfile[] {
       }),
     },
     {
-      pondId: 'R-02',
+      pondId: 'B-02',
       species: '日本囊对虾',
       systemStatus: '摄食关注',
       waterMetrics: createWaterMetrics({
@@ -819,7 +881,7 @@ function createRizhaoProfiles(config: BusinessConfig): PondProfile[] {
       }),
     },
     {
-      pondId: 'R-03',
+      pondId: 'B-03',
       species: '南美白对虾',
       systemStatus: '增氧联动',
       waterMetrics: createWaterMetrics({
@@ -848,7 +910,7 @@ function createRizhaoProfiles(config: BusinessConfig): PondProfile[] {
       }),
     },
     {
-      pondId: 'R-04',
+      pondId: 'B-04',
       species: '斑节对虾',
       systemStatus: '成熟度提升',
       waterMetrics: createWaterMetrics({
@@ -973,9 +1035,9 @@ function createGenericProfiles(config: BusinessConfig): PondProfile[] {
   ]
 }
 
-function createQingdaoRobots(config: BusinessConfig): RobotInfo[] {
-  const primaryRobotCode = formatRobotCode(config, 'QD-RB-01')
-  const primaryRobotName = formatRobotName(config, '青岛一号投喂巡检机器人')
+function createAccountARobots(config: BusinessConfig): RobotInfo[] {
+  const primaryRobotCode = formatRobotCode(config, 'A-RB-01')
+  const primaryRobotName = formatRobotName(config, '企业A一号投喂巡检机器人')
   const primaryPondCode = formatPondCode(config, 'A-01')
 
   return [
@@ -994,8 +1056,8 @@ function createQingdaoRobots(config: BusinessConfig): RobotInfo[] {
       commands: ['09:10 执行池面巡航', '08:50 校验投喂机状态', '08:30 上传水质采样结果'],
     },
     {
-      id: 'QD-RB-02',
-      name: '青岛二号增氧联动机器人',
+      id: 'A-RB-02',
+      name: '企业A二号增氧联动机器人',
       online: true,
       pondId: 'A-02',
       currentTask: '增氧区设备观察',
@@ -1008,8 +1070,8 @@ function createQingdaoRobots(config: BusinessConfig): RobotInfo[] {
       commands: ['08:55 返回待命点', '08:35 完成增氧区巡检', '08:20 接收水质联动任务'],
     },
     {
-      id: 'QD-RB-03',
-      name: '青岛三号水质采样机器人',
+      id: 'A-RB-03',
+      name: '企业A三号水质采样机器人',
       online: true,
       pondId: 'B-01',
       currentTask: '水质采样与边缘巡检',
@@ -1022,8 +1084,8 @@ function createQingdaoRobots(config: BusinessConfig): RobotInfo[] {
       commands: ['09:18 开始水质采样', '09:02 校准采样臂', '08:46 上传边缘点位图像'],
     },
     {
-      id: 'QD-RB-04',
-      name: '青岛四号料台观察机器人',
+      id: 'A-RB-04',
+      name: '企业A四号料台观察机器人',
       online: true,
       pondId: 'C-03',
       currentTask: '料台摄食行为观察',
@@ -1036,8 +1098,8 @@ function createQingdaoRobots(config: BusinessConfig): RobotInfo[] {
       commands: ['09:05 进入料台观察点', '08:42 完成摄食图像上传', '08:20 接收投喂复核任务'],
     },
     {
-      id: 'QD-RB-05',
-      name: '青岛五号投喂辅助机器人',
+      id: 'A-RB-05',
+      name: '企业A五号投喂辅助机器人',
       online: true,
       pondId: 'D-05',
       currentTask: '投喂路径待命',
@@ -1052,10 +1114,10 @@ function createQingdaoRobots(config: BusinessConfig): RobotInfo[] {
   ]
 }
 
-function createRizhaoRobots(config: BusinessConfig): RobotInfo[] {
-  const primaryRobotCode = formatRobotCode(config, 'RZ-RB-01')
-  const primaryRobotName = formatRobotName(config, '日照一号投喂巡检机器人')
-  const primaryPondCode = formatPondCode(config, 'R-01')
+function createAccountBRobots(config: BusinessConfig): RobotInfo[] {
+  const primaryRobotCode = formatRobotCode(config, 'B-RB-01')
+  const primaryRobotName = formatRobotName(config, '企业B一号投喂巡检机器人')
+  const primaryPondCode = formatPondCode(config, 'B-01')
 
   return [
     {
@@ -1073,10 +1135,10 @@ function createRizhaoRobots(config: BusinessConfig): RobotInfo[] {
       commands: ['09:42 执行投喂复核', '09:18 上传料台图像', '08:55 完成水体巡检'],
     },
     {
-      id: 'RZ-RB-02',
-      name: '日照二号水质采样机器人',
+      id: 'B-RB-02',
+      name: '企业B二号水质采样机器人',
       online: true,
-      pondId: 'R-02',
+      pondId: 'B-02',
       currentTask: '水质采样与浊度复核',
       battery: 73,
       feederStatus: '正常',
@@ -1087,10 +1149,10 @@ function createRizhaoRobots(config: BusinessConfig): RobotInfo[] {
       commands: ['09:25 开始水质采样', '09:04 上传浊度复核结果', '08:40 返回采样点'],
     },
     {
-      id: 'RZ-RB-03',
-      name: '日照三号增氧观察机器人',
+      id: 'B-RB-03',
+      name: '企业B三号增氧观察机器人',
       online: true,
-      pondId: 'R-03',
+      pondId: 'B-03',
       currentTask: '增氧设备观察',
       battery: 64,
       feederStatus: '正常',
@@ -1101,10 +1163,10 @@ function createRizhaoRobots(config: BusinessConfig): RobotInfo[] {
       commands: ['09:20 接收增氧观察任务', '08:58 校验增氧点位', '08:36 上传设备状态'],
     },
     {
-      id: 'RZ-RB-04',
-      name: '日照四号夜巡机器人',
+      id: 'B-RB-04',
+      name: '企业B四号夜巡机器人',
       online: false,
-      pondId: 'R-04',
+      pondId: 'B-04',
       currentTask: '等待人工复核',
       battery: 28,
       feederStatus: '正常',
@@ -1413,15 +1475,15 @@ export function getMockSystemData(organizationId: string): MockSystemData {
   const businessConfig = getBusinessConfig(organization.id)
   const pondProfiles =
     organization.id === 'org-qingdao'
-      ? createQingdaoProfiles(businessConfig)
+      ? createAccountAProfiles(businessConfig)
       : organization.id === 'org-rizhao'
-        ? createRizhaoProfiles(businessConfig)
+        ? createAccountBProfiles(businessConfig)
         : createGenericProfiles(businessConfig)
   const robots =
     organization.id === 'org-qingdao'
-      ? createQingdaoRobots(businessConfig)
+      ? createAccountARobots(businessConfig)
       : organization.id === 'org-rizhao'
-        ? createRizhaoRobots(businessConfig)
+        ? createAccountBRobots(businessConfig)
         : createGenericRobots(businessConfig)
   const selectedProfile = pondProfiles[0]!
   const speciesNames = Array.from(new Set(pondProfiles.map((profile) => profile.species)))

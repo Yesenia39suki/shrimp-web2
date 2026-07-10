@@ -321,7 +321,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
         <div class="map-stage-head">
           <div>
             <strong>区域监控主舞台</strong>
-            <span>青岛沿海虾池养殖与投喂监测中心</span>
+            <span>虾池养殖与投喂监测中心</span>
           </div>
           <div class="head-tags">
             <label class="pond-select">

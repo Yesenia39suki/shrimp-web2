@@ -105,8 +105,8 @@ function switchMode(nextMode: 'login' | 'register') {
   <main class="login-page">
     <QingdaoMapBackground />
     <div class="map-labels" aria-hidden="true">
-      <span>青岛西海岸示范基地</span>
-      <span>近海养殖监测区域</span>
+      <span>养殖区域示意图</span>
+      <span>池塘监测区域</span>
       <span>虾池数据隔离节点</span>
     </div>
 
@@ -159,7 +159,7 @@ function switchMode(nextMode: 'login' | 'register') {
           >
             {{ account.label }}：{{ account.email }} / {{ account.password }}
           </button>
-          <span>A账户仅可见青岛企业，B账户仅可见日照企业。</span>
+          <span>A账户与B账户的数据互相隔离，彼此不可见。</span>
         </div>
 
         <button type="button" class="text-button" @click="switchMode('register')">
@@ -193,7 +193,7 @@ function switchMode(nextMode: 'login' | 'register') {
 
         <label>
           <span>所在区域</span>
-          <input v-model.trim="registerRegion" type="text" placeholder="例如：山东青岛" />
+          <input v-model.trim="registerRegion" type="text" placeholder="例如：某某养殖基地" />
         </label>
 
         <label>

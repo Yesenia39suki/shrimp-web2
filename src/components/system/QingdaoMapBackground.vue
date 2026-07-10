@@ -20,7 +20,7 @@ async function initMap() {
     const response = await fetch('/maps/qingdao.geojson')
 
     if (!response.ok) {
-      throw new Error('青岛地图文件加载失败')
+      throw new Error('地图文件加载失败')
     }
 
     const geojson = await response.json()
@@ -95,7 +95,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="qingdao-map-background" aria-hidden="true">
     <div ref="mapRef" class="map-layer"></div>
-    <div v-if="loadFailed" class="map-fallback">青岛轮廓背景待加载</div>
+    <div v-if="loadFailed" class="map-fallback">区域轮廓背景待加载</div>
   </div>
 </template>
 

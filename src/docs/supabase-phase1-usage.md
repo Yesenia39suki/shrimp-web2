@@ -56,7 +56,7 @@ SQL 执行完成后，可以在 Supabase Dashboard 的 Authentication 中创建�
 ```json
 {
   "display_name": "A账户管理员",
-  "organization_name": "青岛智慧养殖示范企业"
+  "organization_name": "用户自定义企业名称"
 }
 ```
 
