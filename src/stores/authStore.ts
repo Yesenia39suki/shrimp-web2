@@ -8,6 +8,7 @@ import {
   getSavedMockSession,
   registerMockUser,
   saveMockSession,
+  updateMockOrganization,
 } from '@/services/mockDataService'
 import type { Organization, OrganizationRole, UserProfile } from '@/types/business'
 import type { MockRegisterPayload } from '@/services/mockDataService'
@@ -136,6 +137,33 @@ export const useAuthStore = defineStore('auth', {
       })
 
       return true
+    },
+    updateCurrentOrganization(payload: Partial<Organization>) {
+      if (!this.currentUser || !this.currentOrganization) {
+        return {
+          success: false,
+          message: '未选择企业。',
+        }
+      }
+
+      const updatedOrganization = updateMockOrganization(this.currentOrganization.id, payload)
+
+      if (!updatedOrganization) {
+        return {
+          success: false,
+          message: '企业信息保存失败。',
+        }
+      }
+
+      this.organizations = getMockOrganizations(this.currentUser.id)
+      this.currentOrganization =
+        this.organizations.find((item) => item.id === updatedOrganization.id) ??
+        updatedOrganization
+
+      return {
+        success: true,
+        message: '企业信息已保存',
+      }
     },
     loadMockSession() {
       if (this.sessionLoaded) {

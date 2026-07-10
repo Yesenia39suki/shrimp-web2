@@ -20,6 +20,10 @@ const saveMessage = ref('')
 const activeSection = ref<'pond' | 'robot' | 'threshold' | 'security'>('pond')
 const selectedPondCode = ref(store.pondConfig.selectedPondId)
 const selectedRobotId = ref(store.editableRobots[0]?.id ?? '')
+const organizationForm = reactive({
+  name: authStore.currentOrganization?.name ?? '',
+  region: authStore.currentOrganization?.region ?? '',
+})
 
 const configSections = [
   {
@@ -107,6 +111,15 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => authStore.currentOrganization,
+  (organization) => {
+    organizationForm.name = organization?.name ?? ''
+    organizationForm.region = organization?.region ?? ''
+  },
+  { immediate: true },
+)
+
 watch(selectedPondCode, () => {
   const robotInPond = store.editableRobots.find((robot) => robot.pond_id === selectedPondCode.value)
   selectedRobotId.value = robotInPond?.id ?? store.editableRobots[0]?.id ?? ''
@@ -152,6 +165,11 @@ function handleSave() {
     return
   }
 
+  if (activeSection.value === 'security') {
+    saveOrganizationForm()
+    return
+  }
+
   const previousPondCode = selectedPondCode.value
   const nextPondCode = form.pond.pond_code.trim() || previousPondCode
 
@@ -165,6 +183,27 @@ function handleSave() {
   selectedRobotId.value = form.robot.id
   store.saveEditableThreshold(nextPondCode, cloneValue(form.waterThreshold))
   saveMessage.value = '配置已保存'
+}
+
+function saveOrganizationForm() {
+  const name = organizationForm.name.trim()
+  const region = organizationForm.region.trim() || '未设置'
+
+  if (!name) {
+    saveMessage.value = '请输入企业名称'
+    return
+  }
+
+  if (name.length < 2 || name.length > 50) {
+    saveMessage.value = '企业名称长度建议为 2 到 50 个字'
+    return
+  }
+
+  const result = authStore.updateCurrentOrganization({
+    name,
+    region,
+  })
+  saveMessage.value = result.message
 }
 
 function handleReset() {
@@ -246,7 +285,12 @@ function goNextSection() {
         </div>
         <button type="button" :disabled="!canEdit" @click="handleSave">保存</button>
         <button type="button" class="ghost" @click="handleReset">重置</button>
-        <span :class="{ warning: !canEdit, success: saveMessage === '配置已保存' }">
+        <span
+          :class="{
+            warning: !canEdit,
+            success: saveMessage === '配置已保存' || saveMessage === '企业信息已保存',
+          }"
+        >
           {{ saveMessage || permissionText }}
         </span>
       </div>
@@ -394,6 +438,28 @@ function goNextSection() {
         </div>
 
         <div v-else class="security-panel">
+          <div class="organization-editor">
+            <label>
+              <span>企业名称</span>
+              <input
+                v-model.trim="organizationForm.name"
+                :disabled="!canEdit"
+                maxlength="50"
+                placeholder="请输入企业或养殖场名称"
+                type="text"
+              />
+            </label>
+            <label>
+              <span>所在区域</span>
+              <input
+                v-model.trim="organizationForm.region"
+                :disabled="!canEdit"
+                maxlength="50"
+                placeholder="请输入企业所在区域"
+                type="text"
+              />
+            </label>
+          </div>
           <article v-for="item in summaryCards" :key="item.label">
             <span>{{ item.label }}</span>
             <strong>{{ item.value }}</strong>
@@ -798,6 +864,13 @@ select:disabled {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   padding: 16px;
+}
+
+.organization-editor {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .security-panel article,

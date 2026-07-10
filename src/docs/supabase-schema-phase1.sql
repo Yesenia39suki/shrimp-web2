@@ -598,3 +598,237 @@ $$;
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant usage, select on all sequences in schema public to authenticated;
+
+create or replace function public.create_default_org_space_for_user(
+  target_user_id uuid,
+  target_email text,
+  target_raw_user_meta_data jsonb default '{}'::jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  safe_meta jsonb := coalesce(target_raw_user_meta_data, '{}'::jsonb);
+  resolved_display_name text;
+  resolved_organization_name text;
+  resolved_short_name text;
+  created_organization_id uuid;
+  created_pond_id uuid;
+begin
+  resolved_display_name := nullif(trim(safe_meta ->> 'display_name'), '');
+  resolved_display_name := coalesce(resolved_display_name, nullif(trim(safe_meta ->> 'name'), ''));
+  resolved_display_name := coalesce(
+    resolved_display_name,
+    nullif(split_part(coalesce(target_email, ''), '@', 1), ''),
+    '新用户'
+  );
+
+  resolved_organization_name := nullif(trim(safe_meta ->> 'organization_name'), '');
+  resolved_organization_name := coalesce(
+    resolved_organization_name,
+    nullif(trim(safe_meta ->> 'company_name'), ''),
+    resolved_display_name || '的智慧养殖企业'
+  );
+
+  resolved_short_name := case
+    when char_length(resolved_organization_name) <= 12 then resolved_organization_name
+    else substring(resolved_organization_name from 1 for 12)
+  end;
+
+  insert into public.profiles (id, display_name, email)
+  values (target_user_id, resolved_display_name, coalesce(target_email, ''))
+  on conflict (id) do update
+    set display_name = excluded.display_name,
+        email = excluded.email,
+        updated_at = now();
+
+  if exists (
+    select 1
+    from public.organization_members
+    where user_id = target_user_id
+  ) then
+    select om.organization_id
+    into created_organization_id
+    from public.organization_members om
+    where om.user_id = target_user_id
+    order by om.created_at
+    limit 1;
+
+    return created_organization_id;
+  end if;
+
+  insert into public.organizations (
+    name,
+    short_name,
+    region,
+    status,
+    owner_user_id
+  )
+  values (
+    resolved_organization_name,
+    resolved_short_name,
+    '未设置',
+    '试用中',
+    target_user_id
+  )
+  returning id into created_organization_id;
+
+  insert into public.organization_members (
+    organization_id,
+    user_id,
+    role
+  )
+  values (
+    created_organization_id,
+    target_user_id,
+    'owner'::public.app_user_role
+  )
+  on conflict (organization_id, user_id) do update
+    set role = excluded.role,
+        updated_at = now();
+
+  insert into public.ponds (
+    organization_id,
+    pond_code,
+    pond_name,
+    shrimp_species,
+    area_mu,
+    water_depth_m,
+    location
+  )
+  values (
+    created_organization_id,
+    'POND-001',
+    '一号养殖池',
+    '南美白对虾',
+    10,
+    1.5,
+    '未设置'
+  )
+  returning id into created_pond_id;
+
+  insert into public.robots (
+    organization_id,
+    pond_id,
+    robot_code,
+    robot_name,
+    robot_type,
+    status
+  )
+  values (
+    created_organization_id,
+    created_pond_id,
+    'ROBOT-001',
+    '一号投喂机器人',
+    '自动投喂机器人',
+    '待命'
+  );
+
+  insert into public.water_thresholds (
+    organization_id,
+    pond_id,
+    temperature_min,
+    temperature_max,
+    dissolved_oxygen_min,
+    dissolved_oxygen_max,
+    ph_min,
+    ph_max,
+    orp_min,
+    orp_max,
+    turbidity_min,
+    turbidity_max,
+    ammonia_min,
+    ammonia_max,
+    nitrite_min,
+    nitrite_max,
+    hardness_min,
+    hardness_max
+  )
+  values (
+    created_organization_id,
+    created_pond_id,
+    20,
+    35,
+    5,
+    9,
+    7,
+    8.6,
+    250,
+    420,
+    0,
+    30,
+    0,
+    0.3,
+    0,
+    0.12,
+    120,
+    260
+  )
+  on conflict (organization_id, pond_id) do nothing;
+
+  return created_organization_id;
+end;
+$$;
+
+create or replace function public.handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.create_default_org_space_for_user(
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data, '{}'::jsonb)
+  );
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+
+create trigger on_auth_user_created
+after insert on auth.users
+for each row
+execute function public.handle_new_auth_user();
+
+create or replace function public.backfill_auth_users_default_data()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  auth_user record;
+  affected_count integer := 0;
+begin
+  for auth_user in
+    select id, email, raw_user_meta_data
+    from auth.users
+  loop
+    if not exists (select 1 from public.profiles where id = auth_user.id)
+       or not exists (
+         select 1
+         from public.organization_members
+         where user_id = auth_user.id
+       ) then
+      perform public.create_default_org_space_for_user(
+        auth_user.id,
+        auth_user.email,
+        coalesce(auth_user.raw_user_meta_data, '{}'::jsonb)
+      );
+      affected_count := affected_count + 1;
+    end if;
+  end loop;
+
+  return affected_count;
+end;
+$$;
+
+revoke all on function public.create_default_org_space_for_user(uuid, text, jsonb) from public;
+revoke all on function public.handle_new_auth_user() from public;
+revoke all on function public.backfill_auth_users_default_data() from public;

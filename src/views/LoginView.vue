@@ -52,13 +52,26 @@ function handleLogin() {
 function handleRegister() {
   errorMessage.value = ''
   infoMessage.value = ''
+
+  const organizationName = registerOrganizationName.value.trim()
+
+  if (!organizationName) {
+    errorMessage.value = '请输入企业或养殖场名称。'
+    return
+  }
+
+  if (organizationName.length < 2 || organizationName.length > 50) {
+    errorMessage.value = '企业名称长度建议为 2 到 50 个字。'
+    return
+  }
+
   loading.value = true
 
   const result = authStore.register({
     displayName: registerDisplayName.value,
     email: registerEmail.value,
     password: registerPassword.value,
-    organizationName: registerOrganizationName.value,
+    organizationName,
     region: registerRegion.value,
   })
 
@@ -168,7 +181,14 @@ function switchMode(nextMode: 'login' | 'register') {
 
         <label>
           <span>企业名称</span>
-          <input v-model.trim="registerOrganizationName" type="text" placeholder="请输入企业名称" />
+          <input
+            v-model.trim="registerOrganizationName"
+            type="text"
+            required
+            minlength="2"
+            maxlength="50"
+            placeholder="请输入企业或养殖场名称"
+          />
         </label>
 
         <label>

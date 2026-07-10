@@ -30,6 +30,7 @@ export const MOCK_DEMO_ACCOUNTS = [
 const AUTH_STORAGE_KEY = 'shrimp_mock_auth_session'
 const BUSINESS_CONFIG_STORAGE_KEY = 'shrimp_mock_business_config'
 const REGISTERED_ACCOUNTS_STORAGE_KEY = 'shrimp_mock_registered_accounts'
+const ORGANIZATION_OVERRIDES_STORAGE_KEY = 'shrimp_mock_organization_overrides'
 const DEFAULT_ORGANIZATION_ID = 'org-qingdao'
 
 export interface MockSession {
@@ -98,6 +99,7 @@ export interface MockSystemData {
 }
 
 type BusinessConfigMap = Record<string, BusinessConfig>
+type OrganizationOverrideMap = Record<string, Partial<Organization>>
 
 const mockOrganizations: Organization[] = [
   {
@@ -230,6 +232,10 @@ function createLocalId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+function formatOrganizationShortName(name: string) {
+  return name.length > 12 ? name.slice(0, 12) : name
+}
+
 function getRegisteredAccounts(): MockAccount[] {
   return readJson<MockAccount[]>(REGISTERED_ACCOUNTS_STORAGE_KEY, [])
 }
@@ -238,12 +244,34 @@ function saveRegisteredAccounts(accounts: MockAccount[]) {
   writeJson(REGISTERED_ACCOUNTS_STORAGE_KEY, accounts)
 }
 
+function getOrganizationOverrides(): OrganizationOverrideMap {
+  return readJson<OrganizationOverrideMap>(ORGANIZATION_OVERRIDES_STORAGE_KEY, {})
+}
+
+function saveOrganizationOverrides(overrides: OrganizationOverrideMap) {
+  writeJson(ORGANIZATION_OVERRIDES_STORAGE_KEY, overrides)
+}
+
+function applyOrganizationOverride(
+  organization: Organization,
+  overrides: OrganizationOverrideMap,
+): Organization {
+  return {
+    ...organization,
+    ...overrides[organization.id],
+    id: organization.id,
+  }
+}
+
 function getAllAccounts() {
   return [...mockAccounts, ...getRegisteredAccounts()]
 }
 
 function getAllOrganizations() {
-  return getAllAccounts().map((account) => account.organization)
+  const overrides = getOrganizationOverrides()
+  return getAllAccounts().map((account) =>
+    applyOrganizationOverride(account.organization, overrides),
+  )
 }
 
 function getAllMembers() {
@@ -1180,6 +1208,45 @@ export function getMockOrganizations(userId?: string) {
   return cloneData(organizations.filter((organization) => organizationIds.has(organization.id)))
 }
 
+export function updateMockOrganization(
+  organizationId: string,
+  payload: Partial<Organization>,
+): Organization | null {
+  const currentOrganization = getAllOrganizations().find(
+    (organization) => organization.id === organizationId,
+  )
+
+  if (!currentOrganization) {
+    return null
+  }
+
+  const nextName = payload.name?.trim() || currentOrganization.name
+  const nextRegion = payload.region?.trim() || currentOrganization.region || '未设置'
+  const nextStatus = payload.status?.trim() || currentOrganization.status || '运行中'
+  const nextOrganization: Organization = {
+    ...currentOrganization,
+    ...payload,
+    id: currentOrganization.id,
+    name: nextName,
+    short_name: payload.short_name?.trim() || formatOrganizationShortName(nextName),
+    region: nextRegion,
+    status: nextStatus,
+    updated_at: new Date().toISOString(),
+  }
+  const overrides = getOrganizationOverrides()
+  overrides[organizationId] = {
+    ...overrides[organizationId],
+    name: nextOrganization.name,
+    short_name: nextOrganization.short_name,
+    region: nextOrganization.region,
+    status: nextOrganization.status,
+    updated_at: nextOrganization.updated_at,
+  }
+  saveOrganizationOverrides(overrides)
+
+  return cloneData(nextOrganization)
+}
+
 export function getMockOrganizationMembers() {
   return cloneData(getAllMembers())
 }
@@ -1261,6 +1328,14 @@ export function registerMockUser(payload: MockRegisterPayload) {
     }
   }
 
+  if (organizationName.length < 2 || organizationName.length > 50) {
+    return {
+      success: false,
+      message: '企业名称长度建议为 2 到 50 个字。',
+      session: null,
+    }
+  }
+
   const exists = getAllAccounts().some((account) => normalizeEmail(account.user.email) === email)
 
   if (exists) {
@@ -1279,7 +1354,7 @@ export function registerMockUser(payload: MockRegisterPayload) {
   const organization: Organization = {
     id: createLocalId('org'),
     name: organizationName,
-    short_name: organizationName.length > 8 ? organizationName.slice(0, 8) : organizationName,
+    short_name: formatOrganizationShortName(organizationName),
     region,
     status: '运行中',
   }

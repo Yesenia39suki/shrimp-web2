@@ -1,4 +1,8 @@
-import { getMockOrganizations, getSavedMockSession } from '@/services/mockDataService'
+import {
+  getMockOrganizations,
+  getSavedMockSession,
+  updateMockOrganization,
+} from '@/services/mockDataService'
 import type { Organization, OrganizationMember, UserRole } from '@/types/business'
 
 export async function getOrganizations(): Promise<Organization[]> {
@@ -17,7 +21,10 @@ export async function updateOrganization(
   payload: Partial<Organization>,
 ): Promise<Organization> {
   // TODO: 调用 /functions/v1 或 Supabase 更新企业，并写 operation_logs。
-  return Promise.resolve({ id: organizationId, ...payload } as Organization)
+  const updatedOrganization = updateMockOrganization(organizationId, payload)
+  return Promise.resolve(
+    updatedOrganization ?? ({ id: organizationId, ...payload } as Organization),
+  )
 }
 
 export async function getOrganizationMembers(

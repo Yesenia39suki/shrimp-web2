@@ -3,9 +3,10 @@ import {
   clearMockSession,
   getMockOrganizations,
   getSavedMockSession,
+  registerMockUser,
   saveMockSession,
 } from '@/services/mockDataService'
-import type { MockSession } from '@/services/mockDataService'
+import type { MockRegisterPayload, MockSession } from '@/services/mockDataService'
 import type { Organization, UserProfile } from '@/types/business'
 
 export async function getCurrentSession(): Promise<MockSession | null> {
@@ -25,6 +26,22 @@ export async function loginWithEmail(email: string, password: string): Promise<M
     saveMockSession(session)
   }
   return Promise.resolve(session)
+}
+
+export async function registerWithEmail(payload: MockRegisterPayload) {
+  // TODO: 接 Supabase 后替换为：
+  // await supabase.auth.signUp({
+  //   email: payload.email,
+  //   password: payload.password,
+  //   options: {
+  //     data: {
+  //       display_name: payload.displayName,
+  //       organization_name: payload.organizationName,
+  //     },
+  //   },
+  // })
+  // 数据库触发器 public.handle_new_auth_user() 会创建企业、成员、池塘、机器人和阈值。
+  return Promise.resolve(registerMockUser(payload))
 }
 
 export async function logout(): Promise<void> {
