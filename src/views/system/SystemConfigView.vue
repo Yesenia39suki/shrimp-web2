@@ -6,9 +6,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useShrimpSystemStore } from '@/stores/shrimpSystem'
 import type {
   BusinessConfig,
-  Pond,
   Robot,
-  WaterThreshold,
   WaterThresholdMetricKey,
 } from '@/types/business'
 
@@ -16,7 +14,9 @@ const authStore = useAuthStore()
 const store = useShrimpSystemStore()
 
 const form = reactive<BusinessConfig>(cloneBusinessConfig(store.businessConfig))
+const robotForm = reactive<Robot>(cloneBusinessConfig(store.businessConfig).robot)
 const saveMessage = ref('')
+const isSaving = ref(false)
 const activeSection = ref<'pond' | 'robot' | 'threshold' | 'security'>('pond')
 const selectedPondCode = ref(store.pondConfig.selectedPondId)
 const selectedRobotId = ref(store.editableRobots[0]?.id ?? '')
@@ -95,17 +95,32 @@ const summaryCards = computed(() => [
 ])
 
 watch(
-  () => [store.editablePonds, store.editableRobots, store.waterThresholdsByPond],
+  () => [store.editablePonds, store.waterThresholdsByPond],
   () => {
     if (!store.editablePonds.some((pond) => pond.pond_code === selectedPondCode.value)) {
       selectedPondCode.value = store.pondConfig.selectedPondId
     }
 
+    syncPondFormFromSelection()
+    saveMessage.value = ''
+  },
+  { immediate: true },
+)
+
+let hasInitializedRobotForm = false
+
+watch(
+  () => store.editableRobots.map((robot) => robot.id).join('|'),
+  () => {
     if (!store.editableRobots.some((robot) => robot.id === selectedRobotId.value)) {
       selectedRobotId.value = store.editableRobots[0]?.id ?? ''
     }
 
-    syncFormFromSelection()
+    if (!hasInitializedRobotForm && selectedRobot.value) {
+      syncRobotFormFromSelection()
+      hasInitializedRobotForm = true
+    }
+
     saveMessage.value = ''
   },
   { immediate: true },
@@ -124,20 +139,20 @@ watch(selectedPondCode, () => {
   const robotInPond = store.editableRobots.find((robot) => robot.pond_id === selectedPondCode.value)
   selectedRobotId.value = robotInPond?.id ?? store.editableRobots[0]?.id ?? ''
   store.selectPond(selectedPondCode.value)
-  syncFormFromSelection()
+  syncPondFormFromSelection()
 })
 
 watch(selectedRobotId, () => {
   syncRobotFormFromSelection()
+  saveMessage.value = ''
 })
 
 function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
-function syncFormFromSelection() {
+function syncPondFormFromSelection() {
   const pond = selectedPond.value
-  const robot = selectedRobot.value
 
   if (pond) {
     form.pond = cloneValue(pond)
@@ -145,47 +160,64 @@ function syncFormFromSelection() {
       store.waterThresholdsByPond[pond.pond_code] ?? store.businessConfig.waterThreshold,
     )
   }
-
-  if (robot) {
-    form.robot = cloneValue(robot)
-  }
 }
 
 function syncRobotFormFromSelection() {
   const robot = selectedRobot.value
 
   if (robot) {
+    Object.assign(robotForm, cloneValue(robot))
     form.robot = cloneValue(robot)
   }
 }
 
-function handleSave() {
+async function handleSave() {
+  if (isSaving.value) {
+    return
+  }
+
   if (!canEdit.value) {
     saveMessage.value = '当前账号仅有查看权限'
     return
   }
 
-  if (activeSection.value === 'security') {
-    saveOrganizationForm()
-    return
+  isSaving.value = true
+
+  try {
+    if (activeSection.value === 'security') {
+      await saveOrganizationForm()
+      return
+    }
+
+    if (activeSection.value === 'pond') {
+      const nextPondCode = form.pond.pond_code.trim() || selectedPondCode.value
+
+      await store.saveEditablePond(cloneValue(form.pond))
+      selectedPondCode.value = nextPondCode
+      syncPondFormFromSelection()
+      saveMessage.value = '配置已保存'
+      return
+    }
+
+    if (activeSection.value === 'robot') {
+      const savedRobot = await store.saveEditableRobot(cloneValue(robotForm))
+      selectedRobotId.value = savedRobot?.id ?? robotForm.id
+      syncRobotFormFromSelection()
+      saveMessage.value = '配置已保存'
+      return
+    }
+
+    await store.saveEditableThreshold(selectedPondCode.value, cloneValue(form.waterThreshold))
+    syncPondFormFromSelection()
+    saveMessage.value = '配置已保存'
+  } catch (error) {
+    saveMessage.value = error instanceof Error ? error.message : '配置保存失败'
+  } finally {
+    isSaving.value = false
   }
-
-  const previousPondCode = selectedPondCode.value
-  const nextPondCode = form.pond.pond_code.trim() || previousPondCode
-
-  if (form.robot.pond_id === previousPondCode) {
-    form.robot.pond_id = nextPondCode
-  }
-
-  store.saveEditablePond(cloneValue(form.pond))
-  selectedPondCode.value = nextPondCode
-  store.saveEditableRobot(cloneValue(form.robot))
-  selectedRobotId.value = form.robot.id
-  store.saveEditableThreshold(nextPondCode, cloneValue(form.waterThreshold))
-  saveMessage.value = '配置已保存'
 }
 
-function saveOrganizationForm() {
+async function saveOrganizationForm() {
   const name = organizationForm.name.trim()
   const region = organizationForm.region.trim() || '未设置'
 
@@ -199,7 +231,7 @@ function saveOrganizationForm() {
     return
   }
 
-  const result = authStore.updateCurrentOrganization({
+  const result = await authStore.updateCurrentOrganization({
     name,
     region,
   })
@@ -207,56 +239,79 @@ function saveOrganizationForm() {
 }
 
 function handleReset() {
-  syncFormFromSelection()
+  if (activeSection.value === 'security') {
+    organizationForm.name = authStore.currentOrganization?.name ?? ''
+    organizationForm.region = authStore.currentOrganization?.region ?? ''
+  } else if (activeSection.value === 'robot') {
+    syncRobotFormFromSelection()
+  } else {
+    syncPondFormFromSelection()
+  }
   saveMessage.value = ''
 }
 
-function handleAddPond() {
+async function handleAddPond() {
   if (!canEdit.value) {
     saveMessage.value = '当前账号仅有查看权限'
     return
   }
 
-  const pond = store.addEditablePond()
-  selectedPondCode.value = pond.pond_code
-  syncFormFromSelection()
-  saveMessage.value = '池塘已新增'
+  try {
+    const pond = await store.addEditablePond()
+    selectedPondCode.value = pond.pond_code
+    syncPondFormFromSelection()
+    saveMessage.value = '池塘已新增'
+  } catch (error) {
+    saveMessage.value = error instanceof Error ? error.message : '池塘新增失败'
+  }
 }
 
-function handleDeletePond() {
+async function handleDeletePond() {
   if (!canEdit.value) {
     saveMessage.value = '当前账号仅有查看权限'
     return
   }
 
-  const deleted = store.deleteEditablePond(selectedPondCode.value)
-  selectedPondCode.value = store.pondConfig.selectedPondId
-  syncFormFromSelection()
-  saveMessage.value = deleted ? '池塘已删除' : '至少保留一个池塘'
+  try {
+    const deleted = await store.deleteEditablePond(selectedPondCode.value)
+    selectedPondCode.value = store.pondConfig.selectedPondId
+    syncPondFormFromSelection()
+    saveMessage.value = deleted ? '池塘已删除' : '至少保留一个池塘'
+  } catch (error) {
+    saveMessage.value = error instanceof Error ? error.message : '池塘删除失败'
+  }
 }
 
-function handleAddRobot() {
+async function handleAddRobot() {
   if (!canEdit.value) {
     saveMessage.value = '当前账号仅有查看权限'
     return
   }
 
-  const robot = store.addEditableRobot(selectedPondCode.value)
-  selectedRobotId.value = robot.id
-  syncFormFromSelection()
-  saveMessage.value = '机器人已新增'
+  try {
+    const robot = await store.addEditableRobot(selectedPondCode.value)
+    selectedRobotId.value = robot.id
+    syncRobotFormFromSelection()
+    saveMessage.value = '机器人已新增'
+  } catch (error) {
+    saveMessage.value = error instanceof Error ? error.message : '机器人新增失败'
+  }
 }
 
-function handleDeleteRobot() {
+async function handleDeleteRobot() {
   if (!canEdit.value) {
     saveMessage.value = '当前账号仅有查看权限'
     return
   }
 
-  const deleted = store.deleteEditableRobot(selectedRobotId.value)
-  selectedRobotId.value = store.editableRobots[0]?.id ?? ''
-  syncFormFromSelection()
-  saveMessage.value = deleted ? '机器人已删除' : '至少保留一个机器人'
+  try {
+    const deleted = await store.deleteEditableRobot(selectedRobotId.value)
+    selectedRobotId.value = store.editableRobots[0]?.id ?? ''
+    syncRobotFormFromSelection()
+    saveMessage.value = deleted ? '机器人已删除' : '至少保留一个机器人'
+  } catch (error) {
+    saveMessage.value = error instanceof Error ? error.message : '机器人删除失败'
+  }
 }
 
 function goPreviousSection() {
@@ -283,7 +338,7 @@ function goNextSection() {
           <strong>{{ organizationName }}</strong>
           <em>{{ authStore.currentRoleText }}</em>
         </div>
-        <button type="button" :disabled="!canEdit" @click="handleSave">保存</button>
+        <button type="button" :disabled="!canEdit || isSaving" @click="handleSave">保存</button>
         <button type="button" class="ghost" @click="handleReset">重置</button>
         <span
           :class="{
@@ -325,8 +380,15 @@ function goNextSection() {
                 {{ pond.pond_code }} / {{ pond.pond_name }}
               </option>
             </select>
-            <button type="button" :disabled="!canEdit" @click="handleAddPond">新增</button>
-            <button type="button" class="danger" :disabled="!canEdit" @click="handleDeletePond">
+            <button type="button" :disabled="!canEdit || isSaving" @click="handleAddPond">
+              新增
+            </button>
+            <button
+              type="button"
+              class="danger"
+              :disabled="!canEdit || isSaving"
+              @click="handleDeletePond"
+            >
               删除
             </button>
           </div>
@@ -336,8 +398,15 @@ function goNextSection() {
                 {{ robot.robot_code }} / {{ robot.robot_name }}
               </option>
             </select>
-            <button type="button" :disabled="!canEdit" @click="handleAddRobot">新增</button>
-            <button type="button" class="danger" :disabled="!canEdit" @click="handleDeleteRobot">
+            <button type="button" :disabled="!canEdit || isSaving" @click="handleAddRobot">
+              新增
+            </button>
+            <button
+              type="button"
+              class="danger"
+              :disabled="!canEdit || isSaving"
+              @click="handleDeleteRobot"
+            >
               删除
             </button>
           </div>
@@ -386,15 +455,15 @@ function goNextSection() {
         <div v-else-if="activeSection === 'robot'" class="form-grid">
           <label>
             <span>机器人编号</span>
-            <input v-model.trim="form.robot.robot_code" :disabled="!canEdit" type="text" />
+            <input v-model.trim="robotForm.robot_code" :disabled="!canEdit" type="text" />
           </label>
           <label>
             <span>机器人名称</span>
-            <input v-model.trim="form.robot.robot_name" :disabled="!canEdit" type="text" />
+            <input v-model.trim="robotForm.robot_name" :disabled="!canEdit" type="text" />
           </label>
           <label>
             <span>机器人类型</span>
-            <select v-model="form.robot.robot_type" :disabled="!canEdit">
+            <select v-model="robotForm.robot_type" :disabled="!canEdit">
               <option v-for="type in robotTypes" :key="type" :value="type">
                 {{ type }}
               </option>
@@ -402,7 +471,7 @@ function goNextSection() {
           </label>
           <label>
             <span>绑定池塘</span>
-            <select v-model="form.robot.pond_id" :disabled="!canEdit">
+            <select v-model="robotForm.pond_id" :disabled="!canEdit">
               <option v-for="pond in store.editablePonds" :key="pond.id" :value="pond.pond_code">
                 {{ pond.pond_code }} / {{ pond.pond_name }}
               </option>
@@ -412,8 +481,8 @@ function goNextSection() {
           <div class="preview-box wide">
             <strong>绑定关系</strong>
             <p>企业：{{ organizationName }}</p>
-            <p>虾池：{{ form.robot.pond_id }}</p>
-            <p>机器人：{{ form.robot.robot_code }} / {{ form.robot.robot_name }}</p>
+            <p>虾池：{{ robotForm.pond_id }}</p>
+            <p>机器人：{{ robotForm.robot_code }} / {{ robotForm.robot_name }}</p>
           </div>
         </div>
 
@@ -501,7 +570,7 @@ function goNextSection() {
         <div class="preview-box">
           <strong>编辑对象</strong>
           <p>{{ form.pond.pond_code }} / {{ form.pond.pond_name }}</p>
-          <p>{{ form.robot.robot_code }} / {{ form.robot.robot_name }}</p>
+          <p>{{ robotForm.robot_code }} / {{ robotForm.robot_name }}</p>
         </div>
       </aside>
     </div>

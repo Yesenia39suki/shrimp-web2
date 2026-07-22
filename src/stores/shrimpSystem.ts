@@ -1,11 +1,28 @@
 import { defineStore } from 'pinia'
 
+import { isSupabaseMode } from '@/config/dataSource'
+import { getAlerts } from '@/services/alertService'
+import { getDevices } from '@/services/deviceService'
+import { getPondDailySnapshots } from '@/services/pondSnapshotService'
+import { createPond, deletePond, getPonds, updatePond } from '@/services/pondService'
+import { createRobot, deleteRobot, getRobots, getRobotStatus, updateRobot } from '@/services/robotService'
+import { getShrimpDailyStats, getShrimpMeasurements } from '@/services/shrimpGrowthService'
 import {
   getDefaultOrganizationId,
   getMockSystemData,
   saveBusinessConfig as saveMockBusinessConfig,
 } from '@/services/mockDataService'
+import { shrimpDailyMetricValue } from '@/services/mappers/shrimpMapper'
+import { waterDailyMetricValue } from '@/services/mappers/waterMapper'
+import { getThresholds, saveThresholds } from '@/services/thresholdService'
+import { getLatestWaterData, getWaterDailyStats } from '@/services/waterDataService'
+import type { PondDailySnapshot } from '@/services/mappers/snapshotMapper'
 import type { BusinessConfig, Pond, Robot, WaterThreshold } from '@/types/business'
+import type { WaterDailyStatsRow, ShrimpDailyStatsRow } from '@/types/database'
+import type { Device } from '@/types/device'
+import type { RobotStatus } from '@/types/robot'
+import type { ShrimpMeasurement } from '@/types/shrimp'
+import type { WaterLatest } from '@/types/water'
 
 export type MetricSource = '水质参数' | '虾群参数' | '机器人状态' | '模型评估'
 export type AlertLevel = '关注' | '预警'
@@ -62,11 +79,23 @@ export interface PondProfile {
 }
 
 interface ShrimpSystemState {
+  loading: boolean
+  error: string
   organizationId: string
+  ponds: Pond[]
+  selectedPondId: string
+  waterLatest: Record<string, WaterLatest | null>
+  waterDailyStats: Record<string, WaterDailyStatsRow[]>
+  shrimpMeasurements: Record<string, ShrimpMeasurement[]>
+  shrimpDailyStats: Record<string, ShrimpDailyStatsRow[]>
+  alerts: SystemAlert[]
+  devices: Device[]
+  snapshots: PondDailySnapshot[]
   businessConfig: BusinessConfig
   editablePonds: Pond[]
   editableRobots: Robot[]
   waterThresholdsByPond: Record<string, WaterThreshold>
+  robotStatusById: Record<string, RobotStatus>
   systemMeta: {
     systemName: string
     logoText: string
@@ -708,9 +737,191 @@ function buildThresholdsByPond(
   }, {})
 }
 
+function formatRuntimeTime(value?: string) {
+  if (!value) return '暂无'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(
+    2,
+    '0',
+  )} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function emptyPond(organizationId: string): Pond {
+  return {
+    id: `empty-pond-${organizationId}`,
+    organization_id: organizationId,
+    pond_code: '暂无',
+    pond_name: '暂无池塘，请先添加',
+    shrimp_species: '暂无',
+    area: 0,
+    water_depth: 0,
+    location: '暂无',
+  }
+}
+
+function emptyRobot(organizationId: string, pondCode: string): Robot {
+  return {
+    id: `empty-robot-${organizationId}`,
+    organization_id: organizationId,
+    pond_id: pondCode,
+    robot_code: '暂无',
+    robot_name: '暂无机器人，请先添加',
+    robot_type: '暂无',
+    status: '暂无',
+  }
+}
+
+function emptyThreshold(organizationId: string, pondCode: string): WaterThreshold {
+  return toWaterThreshold(organizationId, pondCode, {
+    temperature: { min: 20, max: 35 },
+    oxygen: { min: 5, max: 9 },
+    ph: { min: 7, max: 8.6 },
+    orp: { min: 250, max: 420 },
+    turbidity: { min: 0, max: 30 },
+    ammonia: { min: 0, max: 0.3 },
+    nitrite: { min: 0, max: 0.12 },
+    hardness: { min: 120, max: 260 },
+  })
+}
+
+function buildSupabaseWaterMetrics(
+  latest: WaterLatest | null,
+  dailyRows: WaterDailyStatsRow[],
+): SystemMetric[] {
+  const reading = latest?.reading
+  const updatedAt = formatRuntimeTime(latest?.updatedAt ?? reading?.recordedAt)
+  const items = [
+    ['temperature', '温度', '℃', reading?.temperature],
+    ['oxygen', '溶解氧', '毫克/升', reading?.dissolvedOxygen],
+    ['ph', 'pH', '', reading?.ph],
+    ['orp', '氧化还原电位', '毫伏', reading?.orp],
+    ['turbidity', '浊度', '度', reading?.turbidity],
+    ['ammonia', '氨氮', '毫克/升', reading?.ammonia],
+    ['nitrite', '亚硝酸盐', '毫克/升', reading?.nitrite],
+    ['hardness', '钙/镁硬度', '毫克/升', reading?.hardness],
+  ] as const
+
+  return items.map(([key, label, unit, value]) => ({
+    key,
+    label,
+    value: value ?? '暂无',
+    unit,
+    updatedAt,
+    trend: dailyRows.map((row) => waterDailyMetricValue(row, key)),
+  }))
+}
+
+function buildSupabaseShrimpMetrics(input: {
+  organizationId: string
+  pondId: string
+  measurements: ShrimpMeasurement[]
+  dailyRows: ShrimpDailyStatsRow[]
+}) {
+  const latestMeasurement = [...input.measurements].sort((a, b) =>
+    a.measuredAt.localeCompare(b.measuredAt),
+  )[input.measurements.length - 1]
+  const latestDaily = input.dailyRows[input.dailyRows.length - 1]
+  const updatedAt = formatRuntimeTime(latestMeasurement?.measuredAt ?? latestDaily?.updated_at)
+  const metricValues = {
+    length: latestMeasurement?.average_length_cm ?? latestDaily?.avg_length_cm,
+    weight: latestMeasurement?.average_weight_g ?? latestDaily?.avg_weight_g,
+    count: latestDaily?.estimated_count ? Number((latestDaily.estimated_count / 10_000).toFixed(1)) : undefined,
+    yield: latestDaily?.estimated_yield_kg ? Number((latestDaily.estimated_yield_kg / 1000).toFixed(1)) : undefined,
+    cultureDays: undefined,
+    maturity: latestDaily?.maturity_percent,
+  }
+  const items = [
+    ['length', '实测对虾长度', '厘米', metricValues.length],
+    ['weight', '实测对虾重量', '克', metricValues.weight],
+    ['count', '估测对虾数量', '万尾', metricValues.count],
+    ['yield', '对虾产量', '吨', metricValues.yield],
+    ['cultureDays', '养殖时间', '天', metricValues.cultureDays],
+    ['maturity', '养殖成熟度', '%', metricValues.maturity],
+  ] as const
+
+  return [
+    ...items.map(([key, label, unit, value]) => ({
+      key,
+      label,
+      value: value ?? '暂无',
+      unit,
+      updatedAt,
+      trend: input.dailyRows.map((row) => shrimpDailyMetricValue(row, key)),
+    })),
+    {
+      key: 'modelStatus',
+      label: '模型养殖状态评估结果',
+      value: '暂无 AI 评估',
+      unit: '',
+      updatedAt,
+      trend: [],
+      description: '后续由 AI 决策中心生成并持久化。',
+    },
+    {
+      key: 'modelRecommendation',
+      label: '模型养殖决策推荐',
+      value: '暂无 AI 建议',
+      unit: '',
+      updatedAt,
+      trend: [],
+      description: '后续由 AI 投喂建议生成并持久化。',
+    },
+  ] satisfies SystemMetric[]
+}
+
+function mapDatabaseAlert(alert: {
+  id: string
+  createdAt: string
+  type: string
+  level: string
+  title: string
+  content: string
+  pondId?: string
+}) {
+  const sourceMap: Record<string, MetricSource> = {
+    water_quality: '水质参数',
+    robot_fault: '机器人状态',
+    feeding: '模型评估',
+    growth: '虾群参数',
+    device: '机器人状态',
+    ai: '模型评估',
+  }
+
+  return {
+    id: alert.id,
+    time: formatRuntimeTime(alert.createdAt),
+    source: sourceMap[alert.type] ?? '模型评估',
+    type: alert.title,
+    reason: alert.content,
+    currentValue: alert.pondId ?? '数据库报警',
+    normalRange: '见报警详情',
+    suggestion: '请进入报警中心处理。',
+    level: alert.level === 'critical' || alert.level === 'warning' ? '预警' : '关注',
+  } satisfies SystemAlert
+}
+
+function createRecentTimeRange(days = 30) {
+  return {
+    startAt: new Date(Date.now() - days * 24 * 60 * 60_000).toISOString(),
+    endAt: new Date().toISOString(),
+  }
+}
+
 export const useShrimpSystemStore = defineStore('shrimpSystem', {
   state: (): ShrimpSystemState => ({
+    loading: false,
+    error: '',
     organizationId: defaultOrganizationId,
+    ponds: buildEditablePonds(defaultOrganizationId, defaultSystemData),
+    selectedPondId: defaultPondProfile.pondId,
+    waterLatest: {},
+    waterDailyStats: {},
+    shrimpMeasurements: {},
+    shrimpDailyStats: {},
+    alerts: [],
+    devices: [],
+    snapshots: [],
     businessConfig: defaultSystemData.businessConfig,
     editablePonds: buildEditablePonds(defaultOrganizationId, defaultSystemData),
     editableRobots: buildEditableRobots(defaultOrganizationId, defaultSystemData),
@@ -719,6 +930,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       defaultSystemData.pondConfig.pondIds,
       defaultSystemData.thresholds.water,
     ),
+    robotStatusById: {},
     systemMeta: {
       systemName: '虾群养殖投喂系统',
       logoText: 'UpcShrimpFeeding',
@@ -787,12 +999,24 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       )
     },
     waterAlerts(state): SystemAlert[] {
+      if (isSupabaseMode) {
+        return state.alerts.filter((alert) => alert.source === '水质参数')
+      }
+
       return buildRangeAlerts(state.waterMetrics, state.thresholds.water, '水质参数')
     },
     shrimpAlerts(state): SystemAlert[] {
+      if (isSupabaseMode) {
+        return state.alerts.filter((alert) => alert.source === '虾群参数')
+      }
+
       return buildRangeAlerts(state.shrimpMetrics, state.thresholds.shrimp, '虾群参数')
     },
     robotAlerts(state): SystemAlert[] {
+      if (isSupabaseMode) {
+        return state.alerts.filter((alert) => alert.source === '机器人状态')
+      }
+
       return state.robots.flatMap((robot) => {
         const alerts: SystemAlert[] = []
         const config = state.robotConfig.robots.find((item) => item.id === robot.id)
@@ -859,6 +1083,10 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       })
     },
     modelAlerts(state): SystemAlert[] {
+      if (isSupabaseMode) {
+        return state.alerts.filter((alert) => alert.source === '模型评估')
+      }
+
       const modelStatus = metricText(state.shrimpMetrics, 'modelStatus')
       const recommendation = metricText(state.shrimpMetrics, 'modelRecommendation')
       const alerts: SystemAlert[] = []
@@ -905,6 +1133,10 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       return alerts
     },
     allAlerts(): SystemAlert[] {
+      if (isSupabaseMode) {
+        return this.alerts
+      }
+
       return [...this.waterAlerts, ...this.shrimpAlerts, ...this.robotAlerts, ...this.modelAlerts]
     },
     activeAlertCount(): number {
@@ -921,7 +1153,195 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
     },
   },
   actions: {
-    loadOrganizationData(organizationId: string) {
+    async loadSupabaseOrganizationData(organizationId: string) {
+      this.loading = true
+      this.error = ''
+      this.organizationId = organizationId
+      this.ponds = []
+      this.editablePonds = []
+      this.editableRobots = []
+      this.pondProfiles = []
+      this.waterMetrics = []
+      this.shrimpMetrics = []
+      this.robots = []
+      this.waterLatest = {}
+      this.waterDailyStats = {}
+      this.shrimpMeasurements = {}
+      this.shrimpDailyStats = {}
+      this.alerts = []
+      this.devices = []
+      this.snapshots = []
+      this.robotStatusById = {}
+
+      try {
+        const timeRange = createRecentTimeRange(30)
+        const [ponds, robots, devices, alerts] = await Promise.all([
+          getPonds(organizationId),
+          getRobots(organizationId),
+          getDevices(organizationId),
+          getAlerts(organizationId, { readStatus: 'unread' }),
+        ])
+        const selectedPond =
+          ponds.find((pond) => pond.pond_code === this.pondConfig.selectedPondId) ?? ponds[0]
+        const selectedPondCode = selectedPond?.pond_code ?? '暂无'
+        const pondCodeByUuid = new Map(ponds.map((pond) => [pond.id, pond.pond_code]))
+        const editableRobots = robots.map((robot) => ({
+          ...robot,
+          pond_id: pondCodeByUuid.get(robot.pond_id) ?? robot.pond_id,
+        }))
+        const thresholdsByPond: Record<string, WaterThreshold> = {}
+        const waterLatest: Record<string, WaterLatest | null> = {}
+        const waterDailyStats: Record<string, WaterDailyStatsRow[]> = {}
+        const shrimpMeasurements: Record<string, ShrimpMeasurement[]> = {}
+        const shrimpDailyStats: Record<string, ShrimpDailyStatsRow[]> = {}
+        const snapshots: PondDailySnapshot[] = []
+        const robotStatusById: Record<string, RobotStatus> = {}
+        const profiles = await Promise.all(
+          ponds.map(async (pond) => {
+            const pondCode = pond.pond_code
+            const [threshold, latest, waterDaily, measurements, shrimpDaily, pondSnapshots] =
+              await Promise.all([
+                getThresholds(organizationId, pond.id).catch(() =>
+                  emptyThreshold(organizationId, pondCode),
+                ),
+                getLatestWaterData(organizationId, pond.id).catch(() => null),
+                getWaterDailyStats(organizationId, pond.id, timeRange).catch(() => []),
+                getShrimpMeasurements(organizationId, pond.id, timeRange).catch(() => []),
+                getShrimpDailyStats(organizationId, pond.id, timeRange).catch(() => []),
+                getPondDailySnapshots(organizationId, pond.id, timeRange).catch(() => []),
+              ])
+
+            thresholdsByPond[pondCode] = {
+              ...threshold,
+              organization_id: organizationId,
+              pond_id: pondCode,
+            }
+            waterLatest[pondCode] = latest
+            waterDailyStats[pondCode] = waterDaily
+            shrimpMeasurements[pondCode] = measurements
+            shrimpDailyStats[pondCode] = shrimpDaily
+            snapshots.push(...pondSnapshots)
+
+            const pondAlerts = alerts.filter(
+              (alert) => !alert.pondId || alert.pondId === pond.id || alert.pondId === pondCode,
+            )
+            const hasCritical = pondAlerts.some((alert) => alert.level === 'critical')
+            const hasWarning = pondAlerts.some((alert) => alert.level === 'warning')
+
+            return {
+              pondId: pondCode,
+              species: pond.shrimp_species,
+              systemStatus: hasCritical ? '风险预警' : hasWarning ? '需要关注' : '运行稳定',
+              waterMetrics: buildSupabaseWaterMetrics(latest, waterDaily),
+              shrimpMetrics: buildSupabaseShrimpMetrics({
+                organizationId,
+                pondId: pondCode,
+                measurements,
+                dailyRows: shrimpDaily,
+              }),
+            } satisfies PondProfile
+          }),
+        )
+        const robotInfos = await Promise.all(
+          editableRobots.map(async (robot) => {
+            const status = await getRobotStatus(organizationId, robot.id).catch(() => null)
+
+            if (status) {
+              robotStatusById[robot.id] = status
+              robotStatusById[robot.robot_code] = status
+            }
+
+            return {
+              id: robot.robot_code,
+              name: robot.robot_name,
+              online: status?.online ?? robot.status !== '离线',
+              pondId: robot.pond_id,
+              currentTask: robot.status ?? '待命',
+              battery: status?.battery ?? 0,
+              feederStatus: '待接入',
+              motionStatus: status?.workMode ?? robot.status ?? '待命',
+              lastRunAt: formatRuntimeTime(status?.updatedAt ?? robot.updated_at),
+              nextPlanAt: '暂无计划',
+              abnormalStatus: status?.faultCode ?? '无',
+              commands: [],
+            } satisfies RobotInfo
+          }),
+        )
+        const selectedThreshold =
+          thresholdsByPond[selectedPondCode] ?? emptyThreshold(organizationId, selectedPondCode)
+        const selectedRobot =
+          editableRobots.find((robot) => robot.pond_id === selectedPondCode) ??
+          editableRobots[0] ??
+          emptyRobot(organizationId, selectedPondCode)
+        const selectedBusinessPond = selectedPond ?? emptyPond(organizationId)
+        const selectedProfile = profiles.find((profile) => profile.pondId === selectedPondCode)
+
+        this.ponds = cloneData(ponds)
+        this.editablePonds = cloneData(ponds)
+        this.editableRobots = cloneData(editableRobots)
+        this.waterThresholdsByPond = cloneData(thresholdsByPond)
+        this.waterLatest = waterLatest
+        this.waterDailyStats = waterDailyStats
+        this.shrimpMeasurements = shrimpMeasurements
+        this.shrimpDailyStats = shrimpDailyStats
+        this.devices = devices
+        this.snapshots = snapshots
+        this.robotStatusById = cloneData(robotStatusById)
+        this.alerts = alerts.map((alert) =>
+          mapDatabaseAlert({
+            ...alert,
+            pondId: alert.pondId ? (pondCodeByUuid.get(alert.pondId) ?? alert.pondId) : undefined,
+          }),
+        )
+        this.systemMeta = {
+          systemName: '虾群养殖投喂系统',
+          logoText: '智慧养殖系统',
+          online: devices.some((device) => device.status === 'online') || robotInfos.some((robot) => robot.online),
+          currentPondId: selectedPondCode,
+          currentStatus: selectedProfile?.systemStatus ?? '暂无数据',
+        }
+        this.pondProfiles = profiles
+        this.robots = robotInfos
+        this.thresholds = {
+          ...this.thresholds,
+          water: waterThresholdToRangeRecord(selectedThreshold),
+        }
+        this.pondConfig = {
+          pondIds: ponds.map((pond) => pond.pond_code),
+          selectedPondId: selectedPondCode,
+        }
+        this.selectedPondId = selectedPondCode
+        this.shrimpConfig = {
+          ...this.shrimpConfig,
+          species: ponds.map((pond) => pond.shrimp_species).filter(Boolean).join('、') || '暂无',
+        }
+        this.robotConfig = {
+          robots: robotInfos.map((robot) => ({
+            id: robot.id,
+            name: robot.name,
+            pondId: robot.pondId,
+          })),
+        }
+        this.businessConfig = {
+          organization_id: organizationId,
+          pond: cloneData(selectedBusinessPond),
+          robot: cloneData(selectedRobot),
+          waterThreshold: cloneData(selectedThreshold),
+        }
+        this.selectPond(selectedPondCode)
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : '数据库连接失败'
+        throw error
+      } finally {
+        this.loading = false
+      }
+    },
+    async loadOrganizationData(organizationId: string) {
+      if (isSupabaseMode) {
+        await this.loadSupabaseOrganizationData(organizationId)
+        return
+      }
+
       const systemData = getMockSystemData(organizationId)
       const savedEditableConfig = readEditableConfigMap()[organizationId]
       const defaultPonds = buildEditablePonds(organizationId, systemData)
@@ -947,7 +1367,19 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
           ? savedEditableConfig.selectedPondId
           : editablePonds[0]?.pond_code
 
+      this.loading = false
+      this.error = ''
       this.organizationId = organizationId
+      this.ponds = cloneData(editablePonds)
+      this.selectedPondId = selectedPondId ?? systemData.pondConfig.selectedPondId
+      this.waterLatest = {}
+      this.waterDailyStats = {}
+      this.shrimpMeasurements = {}
+      this.shrimpDailyStats = {}
+      this.alerts = []
+      this.devices = []
+      this.snapshots = []
+      this.robotStatusById = {}
       this.businessConfig = systemData.businessConfig
       this.systemMeta = systemData.systemMeta
       this.pondProfiles = systemData.pondProfiles
@@ -963,17 +1395,103 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       this.waterThresholdsByPond = cloneData(waterThresholdsByPond)
       this.rebuildEditableRuntime(selectedPondId ?? systemData.pondConfig.selectedPondId)
     },
-    saveBusinessConfig(config: BusinessConfig) {
+    async saveBusinessConfig(config: BusinessConfig) {
+      if (isSupabaseMode) {
+        await Promise.all([
+          updatePond(this.organizationId, config.pond.id, config.pond),
+          updateRobot(this.organizationId, config.robot.id, config.robot),
+          saveThresholds(
+            this.organizationId,
+            config.pond.pond_code,
+            config.waterThreshold,
+          ),
+        ])
+        await this.loadSupabaseOrganizationData(this.organizationId)
+        return
+      }
+
       saveMockBusinessConfig(this.organizationId, config)
       this.loadOrganizationData(this.organizationId)
     },
     persistEditableRuntime() {
+      if (isSupabaseMode) {
+        return
+      }
+
       writeEditableConfig(this.organizationId, {
         ponds: this.editablePonds,
         robots: this.editableRobots,
         waterThresholdsByPond: this.waterThresholdsByPond,
         selectedPondId: this.pondConfig.selectedPondId,
       })
+    },
+    rebuildRobotRuntimeFromEditable() {
+      const robotInfos = this.editableRobots.map((robot) => {
+        const status = this.robotStatusById[robot.id] ?? this.robotStatusById[robot.robot_code]
+
+        return {
+          id: robot.robot_code,
+          name: robot.robot_name,
+          online: status?.online ?? robot.status !== '离线',
+          pondId: robot.pond_id,
+          currentTask: robot.status ?? '待命',
+          battery: status?.battery ?? 0,
+          feederStatus: '待接入',
+          motionStatus: status?.workMode ?? robot.status ?? '待命',
+          lastRunAt: formatRuntimeTime(status?.updatedAt ?? robot.updated_at),
+          nextPlanAt: '暂无计划',
+          abnormalStatus: status?.faultCode ?? '无',
+          commands: [],
+        } satisfies RobotInfo
+      })
+
+      this.robots = robotInfos
+      this.robotConfig = {
+        robots: robotInfos.map((robot) => ({
+          id: robot.id,
+          name: robot.name,
+          pondId: robot.pondId,
+        })),
+      }
+      this.systemMeta = {
+        ...this.systemMeta,
+        online:
+          this.devices.some((device) => device.status === 'online') ||
+          robotInfos.some((robot) => robot.online),
+      }
+
+      const selectedRobot =
+        this.editableRobots.find((robot) => robot.pond_id === this.pondConfig.selectedPondId) ??
+        this.editableRobots[0]
+
+      if (selectedRobot) {
+        this.businessConfig = {
+          ...this.businessConfig,
+          organization_id: this.organizationId,
+          robot: cloneData(selectedRobot),
+        }
+      }
+    },
+    async reloadSupabaseRobots(selectedRobotId?: string) {
+      const robots = await getRobots(this.organizationId)
+      const pondCodeByUuid = new Map(this.editablePonds.map((pond) => [pond.id, pond.pond_code]))
+      const editableRobots = robots.map((robot) => ({
+        ...robot,
+        pond_id: pondCodeByUuid.get(robot.pond_id) ?? robot.pond_id,
+      }))
+
+      this.editableRobots = cloneData(editableRobots)
+      this.rebuildRobotRuntimeFromEditable()
+
+      return (
+        (selectedRobotId
+          ? this.editableRobots.find(
+              (robot) => robot.id === selectedRobotId || robot.robot_code === selectedRobotId,
+            )
+          : undefined) ??
+        this.editableRobots[0] ??
+        null
+      )
     },
     rebuildEditableRuntime(selectedPondId?: string) {
       const fallbackProfile = this.pondProfiles[0]
@@ -1053,7 +1571,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       }
       this.selectPond(resolvedSelectedPondId)
     },
-    saveEditablePond(pond: Pond) {
+    async saveEditablePond(pond: Pond) {
       const previousPond = this.editablePonds.find((item) => item.id === pond.id)
       const previousPondCode = previousPond?.pond_code
       const normalizedPond = {
@@ -1063,6 +1581,13 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
         pond_name: pond.pond_name.trim() || '未命名养殖池',
         shrimp_species: pond.shrimp_species.trim() || '南美白对虾',
         location: pond.location.trim() || '未设置',
+      }
+
+      if (isSupabaseMode) {
+        const saved = await updatePond(this.organizationId, pond.id, normalizedPond)
+        await this.loadSupabaseOrganizationData(this.organizationId)
+        this.selectPond(saved.pond_code)
+        return
       }
 
       this.editablePonds = this.editablePonds.map((item) =>
@@ -1084,7 +1609,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       this.rebuildEditableRuntime(normalizedPond.pond_code)
       this.persistEditableRuntime()
     },
-    addEditablePond() {
+    async addEditablePond() {
       const nextIndex = this.editablePonds.length + 1
       const pondCode = `P-${String(nextIndex).padStart(2, '0')}`
       const pond: Pond = {
@@ -1098,6 +1623,13 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
         location: '未设置',
       }
 
+      if (isSupabaseMode) {
+        const created = await createPond(this.organizationId, pond)
+        await this.loadSupabaseOrganizationData(this.organizationId)
+        this.selectPond(created.pond_code)
+        return created
+      }
+
       this.editablePonds.push(pond)
       this.waterThresholdsByPond[pondCode] = toWaterThreshold(
         this.organizationId,
@@ -1108,9 +1640,15 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       this.persistEditableRuntime()
       return pond
     },
-    deleteEditablePond(pondCode: string) {
+    async deleteEditablePond(pondCode: string) {
       if (this.editablePonds.length <= 1) {
         return false
+      }
+
+      if (isSupabaseMode) {
+        await deletePond(this.organizationId, pondCode)
+        await this.loadSupabaseOrganizationData(this.organizationId)
+        return true
       }
 
       this.editablePonds = this.editablePonds.filter((pond) => pond.pond_code !== pondCode)
@@ -1132,7 +1670,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       this.persistEditableRuntime()
       return true
     },
-    saveEditableRobot(robot: Robot) {
+    async saveEditableRobot(robot: Robot) {
       const normalizedRobot = {
         ...robot,
         organization_id: this.organizationId,
@@ -1142,13 +1680,25 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
         pond_id: robot.pond_id || this.pondConfig.selectedPondId,
       }
 
+      if (isSupabaseMode) {
+        const saved = await updateRobot(this.organizationId, robot.id, normalizedRobot)
+        const refreshedRobot = await this.reloadSupabaseRobots(saved.id)
+        return (
+          refreshedRobot ?? {
+            ...saved,
+            pond_id: normalizedRobot.pond_id,
+          }
+        )
+      }
+
       this.editableRobots = this.editableRobots.map((item) =>
         item.id === normalizedRobot.id ? normalizedRobot : item,
       )
       this.rebuildEditableRuntime(normalizedRobot.pond_id)
       this.persistEditableRuntime()
+      return normalizedRobot
     },
-    addEditableRobot(pondCode?: string) {
+    async addEditableRobot(pondCode?: string) {
       const nextIndex = this.editableRobots.length + 1
       const robot: Robot = {
         id: `robot-${this.organizationId}-${Date.now()}`,
@@ -1159,14 +1709,29 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
         robot_type: '投喂巡检型',
       }
 
+      if (isSupabaseMode) {
+        const created = await createRobot(this.organizationId, robot)
+        const refreshedRobot = await this.reloadSupabaseRobots(created.id)
+        return refreshedRobot ?? {
+          ...created,
+          pond_id: pondCode ?? this.pondConfig.selectedPondId,
+        }
+      }
+
       this.editableRobots.push(robot)
       this.rebuildEditableRuntime(robot.pond_id)
       this.persistEditableRuntime()
       return robot
     },
-    deleteEditableRobot(robotId: string) {
+    async deleteEditableRobot(robotId: string) {
       if (this.editableRobots.length <= 1) {
         return false
+      }
+
+      if (isSupabaseMode) {
+        await deleteRobot(this.organizationId, robotId)
+        await this.reloadSupabaseRobots()
+        return true
       }
 
       const robot = this.editableRobots.find((item) => item.id === robotId)
@@ -1175,7 +1740,14 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       this.persistEditableRuntime()
       return true
     },
-    saveEditableThreshold(pondCode: string, threshold: WaterThreshold) {
+    async saveEditableThreshold(pondCode: string, threshold: WaterThreshold) {
+      if (isSupabaseMode) {
+        await saveThresholds(this.organizationId, pondCode, threshold)
+        await this.loadSupabaseOrganizationData(this.organizationId)
+        this.selectPond(pondCode)
+        return
+      }
+
       this.waterThresholdsByPond[pondCode] = {
         ...threshold,
         organization_id: this.organizationId,
@@ -1186,6 +1758,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
     },
     selectPond(pondId: string) {
       this.pondConfig.selectedPondId = pondId
+      this.selectedPondId = pondId
       this.systemMeta.currentPondId = pondId
       const threshold = this.waterThresholdsByPond[pondId]
 

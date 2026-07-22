@@ -21,12 +21,8 @@ const deviceOnlineRate = computed(() => {
 })
 
 const feedRecommendation = computed(() => {
-  const maturity = Number(
-    store.shrimpMetrics.find((metric) => metric.key === 'maturity')?.value ?? 0,
-  )
-  const temperature = Number(
-    store.waterMetrics.find((metric) => metric.key === 'temperature')?.value ?? 0,
-  )
+  const maturity = shrimpMetricNumber('maturity')
+  const temperature = metricNumber('temperature')
 
   return Math.round(220 + maturity * 1.5 + temperature * 1.6)
 })
@@ -35,6 +31,16 @@ const modelConfidence = computed(() => {
   const base = 96 - store.activeAlertCount * 4 - store.robotAlerts.length * 2
   return Math.max(78, Math.min(96, base))
 })
+
+function metricNumber(key: string, fallback = 0) {
+  const value = Number(store.waterMetrics.find((metric) => metric.key === key)?.value ?? fallback)
+  return Number.isFinite(value) ? value : fallback
+}
+
+function shrimpMetricNumber(key: string, fallback = 0) {
+  const value = Number(store.shrimpMetrics.find((metric) => metric.key === key)?.value ?? fallback)
+  return Number.isFinite(value) ? value : fallback
+}
 
 const riskLevel = computed(() => {
   if (store.activeAlertCount === 0) {
@@ -49,23 +55,23 @@ const riskLevel = computed(() => {
 })
 
 const maturityValue = computed(() => {
-  return Number(store.shrimpMetrics.find((metric) => metric.key === 'maturity')?.value ?? 0)
+  return shrimpMetricNumber('maturity')
 })
 
 const yieldValue = computed(() => {
-  return Number(store.shrimpMetrics.find((metric) => metric.key === 'yield')?.value ?? 0)
+  return shrimpMetricNumber('yield')
 })
 
 const temperatureValue = computed(() => {
-  return Number(store.waterMetrics.find((metric) => metric.key === 'temperature')?.value ?? 0)
+  return metricNumber('temperature')
 })
 
 const oxygenValue = computed(() => {
-  return Number(store.waterMetrics.find((metric) => metric.key === 'oxygen')?.value ?? 0)
+  return metricNumber('oxygen')
 })
 
 const phValue = computed(() => {
-  return Number(store.waterMetrics.find((metric) => metric.key === 'ph')?.value ?? 0)
+  return metricNumber('ph')
 })
 
 const eventRows = computed(() => {
@@ -239,15 +245,15 @@ const stageEvents = computed(() => store.allAlerts.slice(0, 4))
 const selectedSummaryRows = computed(() => [
   {
     label: '实测重量',
-    value: `${Number(store.shrimpMetrics.find((metric) => metric.key === 'weight')?.value ?? 0)}克`,
+    value: `${shrimpMetricNumber('weight')}克`,
   },
   {
     label: '估测数量',
-    value: `${Number(store.shrimpMetrics.find((metric) => metric.key === 'count')?.value ?? 0)}万尾`,
+    value: `${shrimpMetricNumber('count')}万尾`,
   },
   {
     label: '养殖天数',
-    value: `${Number(store.shrimpMetrics.find((metric) => metric.key === 'cultureDays')?.value ?? 0)}天`,
+    value: `${shrimpMetricNumber('cultureDays')}天`,
   },
   {
     label: '当前产量',
@@ -263,8 +269,8 @@ const pondSnapshotRows = computed(() =>
     return {
       pondId: profile.pondId,
       species: profile.species,
-      maturity: Number(maturityMetric?.value ?? 0),
-      oxygen: Number(oxygenMetric?.value ?? 0),
+      maturity: Number.isFinite(Number(maturityMetric?.value)) ? Number(maturityMetric?.value) : 0,
+      oxygen: Number.isFinite(Number(oxygenMetric?.value)) ? Number(oxygenMetric?.value) : 0,
       active: profile.pondId === store.pondConfig.selectedPondId,
     }
   }),

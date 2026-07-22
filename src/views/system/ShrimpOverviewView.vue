@@ -14,12 +14,14 @@ const pondRows = computed(() =>
   store.pondProfiles.map((profile) => {
     const weightMetric = profile.shrimpMetrics.find((metric) => metric.key === 'weight')
     const maturityMetric = profile.shrimpMetrics.find((metric) => metric.key === 'maturity')
+    const weight = Number(weightMetric?.value)
+    const maturity = Number(maturityMetric?.value)
 
     return {
       pondId: profile.pondId,
       species: profile.species,
-      weight: Number(weightMetric?.value ?? 0),
-      maturity: Number(maturityMetric?.value ?? 0),
+      weight: Number.isFinite(weight) ? weight : 0,
+      maturity: Number.isFinite(maturity) ? maturity : 0,
       active: profile.pondId === store.pondConfig.selectedPondId,
     }
   }),

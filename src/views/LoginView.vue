@@ -32,24 +32,24 @@ function getRedirectPath() {
   return redirect
 }
 
-function handleLogin() {
+async function handleLogin() {
   errorMessage.value = ''
   infoMessage.value = ''
   loading.value = true
 
-  const result = authStore.login(email.value, password.value)
-
-  loading.value = false
+  const result = await authStore.login(email.value, password.value)
 
   if (!result.success) {
+    loading.value = false
     errorMessage.value = result.message
     return
   }
 
+  loading.value = false
   router.replace(getRedirectPath())
 }
 
-function handleRegister() {
+async function handleRegister() {
   errorMessage.value = ''
   infoMessage.value = ''
 
@@ -67,7 +67,7 @@ function handleRegister() {
 
   loading.value = true
 
-  const result = authStore.register({
+  const result = await authStore.register({
     displayName: registerDisplayName.value,
     email: registerEmail.value,
     password: registerPassword.value,
@@ -75,13 +75,13 @@ function handleRegister() {
     region: registerRegion.value,
   })
 
-  loading.value = false
-
   if (!result.success) {
+    loading.value = false
     errorMessage.value = result.message
     return
   }
 
+  loading.value = false
   infoMessage.value = result.message
   router.replace('/system')
 }

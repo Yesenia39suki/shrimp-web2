@@ -1,17 +1,17 @@
 import { defineStore } from 'pinia'
 
 import {
-  authenticateMockUser,
-  clearMockSession,
-  getMockOrganizations,
-  getOrganizationRole,
-  getSavedMockSession,
-  registerMockUser,
-  saveMockSession,
-  updateMockOrganization,
-} from '@/services/mockDataService'
+  getCurrentSession,
+  loadOrganizationRole,
+  loadUserOrganizations,
+  loginWithEmail,
+  logout as logoutService,
+  registerWithEmail,
+  switchOrganization as switchOrganizationService,
+} from '@/services/authService'
+import { updateOrganization } from '@/services/organizationService'
 import type { Organization, OrganizationRole, UserProfile } from '@/types/business'
-import type { MockRegisterPayload } from '@/services/mockDataService'
+import type { MockRegisterPayload, MockSession } from '@/services/mockDataService'
 
 const roleTextMap: Record<OrganizationRole, string> = {
   owner: '所有者',
@@ -23,20 +23,24 @@ const roleTextMap: Record<OrganizationRole, string> = {
 interface AuthState {
   isLoggedIn: boolean
   currentUser: UserProfile | null
+  currentProfile: UserProfile | null
   currentOrganization: Organization | null
   currentRole: OrganizationRole | null
   organizations: Organization[]
   sessionLoaded: boolean
+  error: string
 }
 
 export const useAuthStore = defineStore('auth', {
   state: (): AuthState => ({
     isLoggedIn: false,
     currentUser: null,
+    currentProfile: null,
     currentOrganization: null,
     currentRole: null,
     organizations: [],
     sessionLoaded: false,
+    error: '',
   }),
   getters: {
     currentRoleText(state) {
@@ -49,96 +53,134 @@ export const useAuthStore = defineStore('auth', {
         state.currentRole === 'operator'
       )
     },
+    canDeleteBusinessConfig(state) {
+      return state.currentRole === 'owner' || state.currentRole === 'admin'
+    },
   },
   actions: {
-    applySession(user: UserProfile, organizationId: string, role: OrganizationRole) {
-      this.organizations = getMockOrganizations(user.id)
-      const organization = this.organizations.find((item) => item.id === organizationId)
-      const resolvedRole = organization ? getOrganizationRole(user.id, organization.id) : null
+    resetSessionState(message = '') {
+      this.isLoggedIn = false
+      this.currentUser = null
+      this.currentProfile = null
+      this.currentOrganization = null
+      this.currentRole = null
+      this.organizations = []
+      this.error = message
+    },
+    async applySession(session: MockSession | null) {
+      if (!session) {
+        this.resetSessionState()
+        return
+      }
 
-      if (!organization || !resolvedRole) {
-        this.isLoggedIn = false
-        this.currentUser = null
-        this.currentOrganization = null
-        this.currentRole = null
-        this.organizations = []
+      this.organizations = await loadUserOrganizations(session.user.id)
+      const organization =
+        this.organizations.find((item) => item.id === session.organizationId) ??
+        this.organizations[0]
+
+      if (!organization) {
+        this.resetSessionState('当前账号尚未加入企业，请联系管理员。')
+        return
+      }
+
+      const resolvedRole = await loadOrganizationRole(session.user.id, organization.id)
+
+      if (!resolvedRole) {
+        this.resetSessionState('当前账号尚未加入企业，请联系管理员。')
         return
       }
 
       this.isLoggedIn = true
-      this.currentUser = user
+      this.currentUser = session.user
+      this.currentProfile = session.user
       this.currentOrganization = organization
-      this.currentRole = resolvedRole ?? role
+      this.currentRole = resolvedRole
+      this.error = ''
     },
-    login(email: string, password: string) {
-      const session = authenticateMockUser(email, password)
+    async login(email: string, password: string) {
+      try {
+        const session = await loginWithEmail(email, password)
 
-      if (!session) {
+        if (!session) {
+          return {
+            success: false,
+            message: '邮箱或密码错误，请使用演示账号登录。',
+          }
+        }
+
+        await this.applySession(session)
+        this.sessionLoaded = true
+
+        if (!this.isLoggedIn) {
+          return {
+            success: false,
+            message: this.error || '当前账号尚未加入企业，请联系管理员。',
+          }
+        }
+
+        return {
+          success: true,
+          message: '登录成功',
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '登录失败'
+        this.resetSessionState(message)
+        this.sessionLoaded = true
         return {
           success: false,
-          message: '邮箱或密码错误，请使用演示账号登录。',
+          message,
         }
       }
-
-      this.applySession(session.user, session.organizationId, session.role)
-      saveMockSession(session)
-      this.sessionLoaded = true
-
-      return {
-        success: true,
-        message: '登录成功',
-      }
     },
-    register(payload: MockRegisterPayload) {
-      const result = registerMockUser(payload)
+    async register(payload: MockRegisterPayload) {
+      try {
+        const result = await registerWithEmail(payload)
 
-      if (!result.success || !result.session) {
+        if (!result.success || !result.session) {
+          return {
+            success: result.success,
+            message: result.message,
+          }
+        }
+
+        await this.applySession(result.session)
+        this.sessionLoaded = true
+
+        return {
+          success: this.isLoggedIn,
+          message: this.isLoggedIn
+            ? result.message
+            : this.error || '注册成功，请登录后继续。',
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '注册失败'
         return {
           success: false,
-          message: result.message,
+          message,
         }
       }
-
-      this.applySession(result.session.user, result.session.organizationId, result.session.role)
-      this.sessionLoaded = true
-
-      return {
-        success: true,
-        message: result.message,
-      }
     },
-    logout() {
-      clearMockSession()
-      this.isLoggedIn = false
-      this.currentUser = null
-      this.currentOrganization = null
-      this.currentRole = null
-      this.organizations = []
+    async logout() {
+      await logoutService()
+      this.resetSessionState()
       this.sessionLoaded = true
     },
-    switchOrganization(organizationId: string) {
+    async switchOrganization(organizationId: string) {
       if (!this.currentUser) {
         return false
       }
 
-      const organization = this.organizations.find((item) => item.id === organizationId)
-      const role = getOrganizationRole(this.currentUser.id, organizationId)
-
-      if (!organization || !role) {
+      try {
+        const session = await switchOrganizationService(organizationId)
+        if (!session) return false
+        await this.applySession(session)
+        return this.currentOrganization?.id === organizationId
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : '切换企业失败'
         return false
       }
-
-      this.currentOrganization = organization
-      this.currentRole = role
-      saveMockSession({
-        user: this.currentUser,
-        organizationId: organization.id,
-        role,
-      })
-
-      return true
     },
-    updateCurrentOrganization(payload: Partial<Organization>) {
+    async updateCurrentOrganization(payload: Partial<Organization>) {
       if (!this.currentUser || !this.currentOrganization) {
         return {
           success: false,
@@ -146,43 +188,36 @@ export const useAuthStore = defineStore('auth', {
         }
       }
 
-      const updatedOrganization = updateMockOrganization(this.currentOrganization.id, payload)
+      try {
+        const updatedOrganization = await updateOrganization(this.currentOrganization.id, payload)
+        this.organizations = await loadUserOrganizations(this.currentUser.id)
+        this.currentOrganization =
+          this.organizations.find((item) => item.id === updatedOrganization.id) ??
+          updatedOrganization
 
-      if (!updatedOrganization) {
+        return {
+          success: true,
+          message: '企业信息已保存',
+        }
+      } catch (error) {
         return {
           success: false,
-          message: '企业信息保存失败。',
+          message: error instanceof Error ? error.message : '企业信息保存失败。',
         }
       }
-
-      this.organizations = getMockOrganizations(this.currentUser.id)
-      this.currentOrganization =
-        this.organizations.find((item) => item.id === updatedOrganization.id) ??
-        updatedOrganization
-
-      return {
-        success: true,
-        message: '企业信息已保存',
-      }
     },
-    loadMockSession() {
+    async loadMockSession() {
       if (this.sessionLoaded) {
         return
       }
 
-      const session = getSavedMockSession()
-
-      if (session) {
-        this.applySession(session.user, session.organizationId, session.role)
-      } else {
-        this.isLoggedIn = false
-        this.currentUser = null
-        this.currentOrganization = null
-        this.currentRole = null
-        this.organizations = []
+      try {
+        await this.applySession(await getCurrentSession())
+      } catch (error) {
+        this.resetSessionState(error instanceof Error ? error.message : '登录状态已失效，请重新登录')
+      } finally {
+        this.sessionLoaded = true
       }
-
-      this.sessionLoaded = true
     },
   },
 })

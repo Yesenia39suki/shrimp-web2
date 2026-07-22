@@ -14,7 +14,7 @@ watch(
   () => authStore.currentOrganization?.id,
   (organizationId) => {
     if (organizationId) {
-      systemStore.loadOrganizationData(organizationId)
+      void systemStore.loadOrganizationData(organizationId)
     }
   },
   { immediate: true },

@@ -180,6 +180,15 @@ function assertWritable() {
   return false
 }
 
+async function loadOrFallback<T>(loader: () => Promise<T>, fallback: T, message: string) {
+  try {
+    return await loader()
+  } catch (error) {
+    actionMessage.value = error instanceof Error ? error.message : message
+    return fallback
+  }
+}
+
 async function loadExtensionData() {
   if (!organizationId.value || !pondId.value) {
     return
@@ -189,7 +198,7 @@ async function loadExtensionData() {
   actionMessage.value = ''
 
   try {
-    const robotKey = robotId.value || 'mock-robot'
+    const robotKey = robotId.value
     const [
       latestPosition,
       track,
@@ -206,24 +215,65 @@ async function loadExtensionData() {
       shrimpEstimate,
       robotStatus,
     ] = await Promise.all([
-      getLatestRobotPosition(organizationId.value, robotKey),
-      getRobotTrack(organizationId.value, robotKey, timeRange.value),
-      requestPondEvaluation(organizationId.value, pondId.value, {
-        providerType: modelConfig.providerType,
-      }),
-      requestFeedingAdvice(organizationId.value, pondId.value, {
-        providerType: modelConfig.providerType,
-      }),
+      robotKey
+        ? loadOrFallback(
+            () => getLatestRobotPosition(organizationId.value, robotKey),
+            null,
+            '暂无小车定位数据',
+          )
+        : Promise.resolve(null),
+      robotKey
+        ? loadOrFallback(
+            () => getRobotTrack(organizationId.value, robotKey, timeRange.value),
+            { organizationId: organizationId.value, robotId: robotKey, timeRange: timeRange.value, points: [] },
+            '暂无小车轨迹数据',
+          )
+        : Promise.resolve({
+            organizationId: organizationId.value,
+            robotId: '',
+            timeRange: timeRange.value,
+            points: [],
+          }),
+      loadOrFallback(
+        () =>
+          requestPondEvaluation(organizationId.value, pondId.value, {
+            providerType: modelConfig.providerType,
+          }),
+        null,
+        '暂无 AI 状态评估',
+      ),
+      loadOrFallback(
+        () =>
+          requestFeedingAdvice(organizationId.value, pondId.value, {
+            providerType: modelConfig.providerType,
+          }),
+        null,
+        '暂无 AI 投喂建议',
+      ),
       loadModelConfig(organizationId.value),
-      getFeedingPlans(organizationId.value, pondId.value),
-      getTodayFeedingTasks(organizationId.value, pondId.value),
-      getFeedingRecords(organizationId.value, pondId.value, timeRange.value),
-      getDevices(organizationId.value),
-      loadAiRequestLogs(organizationId.value),
-      getLatestWaterData(organizationId.value, pondId.value),
-      getThresholds(organizationId.value, pondId.value),
-      getShrimpEstimate(organizationId.value, pondId.value),
-      getRobotStatus(organizationId.value, robotKey),
+      loadOrFallback(() => getFeedingPlans(organizationId.value, pondId.value), [], '暂无投喂计划'),
+      loadOrFallback(
+        () => getTodayFeedingTasks(organizationId.value, pondId.value),
+        [],
+        '暂无今日投喂任务',
+      ),
+      loadOrFallback(
+        () => getFeedingRecords(organizationId.value, pondId.value, timeRange.value),
+        [],
+        '暂无投喂记录',
+      ),
+      loadOrFallback(() => getDevices(organizationId.value), [], '暂无设备数据'),
+      loadOrFallback(() => loadAiRequestLogs(organizationId.value), [], '暂无 AI 请求日志'),
+      loadOrFallback(
+        () => getLatestWaterData(organizationId.value, pondId.value),
+        null,
+        '暂无水质数据',
+      ),
+      loadOrFallback(() => getThresholds(organizationId.value, pondId.value), null, '暂无阈值配置'),
+      loadOrFallback(() => getShrimpEstimate(organizationId.value, pondId.value), null, '暂无虾群估算'),
+      robotKey
+        ? loadOrFallback(() => getRobotStatus(organizationId.value, robotKey), null, '暂无机器人状态')
+        : Promise.resolve(null),
     ])
 
     robotPosition.value = latestPosition
@@ -236,13 +286,16 @@ async function loadExtensionData() {
     feedingRecords.value = records
     devices.value = nextDevices
     aiLogs.value = logs
-    riskResult.value = calculateTotalRisk({
-      waterData: latestWater.reading,
-      thresholds,
-      feedingRecords: records,
-      shrimpData: shrimpEstimate,
-      robotStatus,
-    })
+    riskResult.value =
+      latestWater && thresholds && shrimpEstimate && robotStatus
+        ? calculateTotalRisk({
+            waterData: latestWater.reading,
+            thresholds,
+            feedingRecords: records,
+            shrimpData: shrimpEstimate,
+            robotStatus,
+          })
+        : null
   } finally {
     loading.value = false
   }

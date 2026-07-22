@@ -32,7 +32,8 @@ const thresholdText = computed(() => {
 const pondMetricRows = computed(() => {
   return store.pondProfiles.map((profile) => {
     const pondMetric = profile.waterMetrics.find((item) => item.key === metricKey.value)
-    const value = Number(pondMetric?.value ?? 0)
+    const numericValue = Number(pondMetric?.value)
+    const value = Number.isFinite(numericValue) ? numericValue : 0
     const isWarning = threshold.value
       ? value < threshold.value.min || value > threshold.value.max
       : false

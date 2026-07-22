@@ -1,6 +1,6 @@
 # Supabase 第一阶段 SQL 使用说明
 
-本文档说明 `src/docs/supabase-schema-phase1.sql` 的用途、执行顺序和注册默认数据逻辑。当前仍不接 Supabase 客户端，不删除 mock/localStorage。
+本文档说明 Supabase SQL 的用途、执行顺序、注册默认数据逻辑和前端环境变量。当前前端已支持 `mock` 与 `supabase` 两种数据源模式。
 
 ## 1. 执行 SQL
 
@@ -9,6 +9,18 @@
 `src/docs/supabase-schema-phase1.sql`
 
 该 SQL 会创建第一阶段表结构、索引、`updated_at` 自动更新触发器、权限辅助函数和基础 RLS 策略。
+
+随后继续执行：
+
+`src/docs/supabase-migration-full-integration.sql`
+
+该 SQL 会补齐扩展页面和历史页面需要的表、索引、RLS、Realtime 可订阅表结构和统计 RPC。
+
+需要演示历史图表时，再手动执行：
+
+`src/docs/supabase-seed-demo-data.sql`
+
+执行前必须替换 SQL 顶部的 `target_organization_id` 和 `target_pond_id`，不要直接用占位 UUID。
 
 ## 2. Auth 注册触发器
 
@@ -77,9 +89,33 @@ select public.backfill_auth_users_default_data();
 - 企业名称仍优先读取 `raw_user_meta_data.organization_name`。
 - 如果没有企业名称，则使用“用户昵称的智慧养殖企业”。
 
-## 5. 第一阶段前端优先接入表
+## 5. 前端环境变量
 
-第一阶段 Vue 前端建议只先接以下表：
+本地 `.env.local` 示例：
+
+```env
+VITE_DATA_SOURCE=supabase
+VITE_SUPABASE_URL=https://你的项目.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=你的 publishable/anon key
+```
+
+兼容旧命名：
+
+```env
+VITE_SUPABASE_ANON_KEY=你的 anon key
+```
+
+前端只允许使用 publishable/anon key，不允许写入 `service_role` key 或任何模型 API Key。
+
+需要回到离线演示模式时：
+
+```env
+VITE_DATA_SOURCE=mock
+```
+
+## 6. 已接入的前端表
+
+当前前端 Supabase 模式已通过 service 层接入：
 
 1. `profiles`
 2. `organizations`
@@ -87,39 +123,37 @@ select public.backfill_auth_users_default_data();
 4. `ponds`
 5. `robots`
 6. `water_thresholds`
+7. `devices`
+8. `water_readings`
+9. `water_latest`
+10. `water_daily_stats`
+11. `feeding_records`
+12. `feeding_daily_stats`
+13. `shrimp_measurements`
+14. `shrimp_daily_stats`
+15. `alert_rules`
+16. `alerts`
+17. `pond_daily_snapshots`
 
-这几张表对应当前已经完成的登录、多企业、角色权限、自定义内容、池塘管理、机器人管理、水质阈值设置。
+补充迁移后还会接入：
 
-## 6. 暂时只建表、不接页面的表
+- `feeding_plans`
+- `feeding_tasks`
+- `robot_status`
+- `robot_position_latest`
+- `robot_position_history`
+- `robot_commands`
+- `robot_command_acks`
+- `ai_model_configs`
+- `risk_scores`
+- `ai_evaluations`
+- `ai_feeding_advices`
+- `ai_result_feedback`
+- `ai_request_logs`
+- `scene_configs`
+- `operation_logs`
 
-以下表第一阶段先创建，暂时不接 Vue 页面：
-
-- `devices`
-- `water_readings`
-- `water_latest`
-- `water_daily_stats`
-- `feeding_records`
-- `feeding_daily_stats`
-- `shrimp_measurements`
-- `shrimp_daily_stats`
-- `alert_rules`
-- `alerts`
-- `pond_daily_snapshots`
-
-这些表用于后续水质历史、历史数据对比、报警中心、设备管理、虾群生长统计、投喂统计和日快照。
-
-## 7. 历史数据页面后续接入顺序
-
-历史数据页面建议后续按这个顺序接：
-
-1. `water_readings`：水质折线图、柱状图、池塘间同指标对比。
-2. `water_daily_stats`：近 7 天、近 30 天、近 3 个月汇总数据。
-3. `feeding_records` 和 `feeding_daily_stats`：投喂历史和日统计。
-4. `shrimp_measurements` 和 `shrimp_daily_stats`：虾长、虾重、样本数量、生长趋势。
-5. `alerts`：报警历史、处理状态和报警数量趋势。
-6. `pond_daily_snapshots`：综合日报视图和跨模块汇总。
-
-## 8. RLS 权限说明
+## 7. RLS 权限说明
 
 SQL 已开启 RLS，并提供以下辅助函数：
 
@@ -138,14 +172,14 @@ SQL 已开启 RLS，并提供以下辅助函数：
 - `organizations` 只有成员可读，`owner/admin` 可修改。
 - `organization_members` 只有企业成员可读，`owner/admin` 可管理。
 
-## 9. 字段补充说明
+## 8. 字段补充说明
 
 - `organization_members` 包含 `updated_at`，成员角色从 `viewer` 改为 `operator/admin` 等场景会自动刷新更新时间。
 - `alerts` 包含 `updated_at`，报警从 `unread` 改为 `read/resolved` 等状态变化会自动刷新更新时间。
 - 这两个表都已加入 `set_updated_at` 触发器列表。
 - `organizations.name` 保存注册时传入的企业名称，`organizations.short_name` 自动截取前 12 个字符。
 
-## 10. 命名转换注意事项
+## 9. 命名转换注意事项
 
 数据库统一使用 snake_case。
 
@@ -165,13 +199,10 @@ SQL 已开启 RLS，并提供以下辅助函数：
 
 特别注意：前端当前阈值类型里叫 `oxygen`，数据库统一叫 `dissolved_oxygen`。
 
-## 11. 当前不要做
+## 10. 当前不要做
 
 当前阶段不要做：
 
-- 不要在前端保存任何 Supabase key。
+- 不要在前端保存任何私密 key。
 - 不要写 service_role key。
-- 不要接 Supabase 客户端。
-- 不要改 Pinia store。
-- 不要删除 mock/localStorage。
 - 不要接硬件、MQTT 或真实 AI 模型。
