@@ -12,9 +12,9 @@ GitHub 与 Supabase 集成启用后，只会自动执行该目录内尚未应用
 
 当前标准迁移顺序为：
 
-1. `supabase/migrations/20260813000000_schema_phase1.sql`
-2. `supabase/migrations/20260813000100_full_integration.sql`
-3. `supabase/migrations/20260813221218_empty_organization_registration_and_tenant_guards.sql`
+1. `supabase/migrations/20260814064529_schema_phase1.sql`
+2. `supabase/migrations/20260814064535_full_integration.sql`
+3. `supabase/migrations/20260814064539_empty_organization_registration_and_tenant_guards.sql`
 
 前两份迁移用于完整重建新环境，也采用可重复执行写法兼容当前已经通过 SQL Editor 建立的远端结构。第三份迁移只更新注册初始化、函数执行权限和多租户组合外键，不会删除已有业务数据。项目的 `supabase/config.toml` 已关闭自动 Seed，GitHub 部署不得自动执行演示数据。
 
