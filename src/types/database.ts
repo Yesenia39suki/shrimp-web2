@@ -25,7 +25,6 @@ export type DbRiskLevel = '低风险' | '关注' | '预警' | '高风险'
 type GeneratedColumns = 'id' | 'created_at' | 'updated_at'
 type InsertFromRow<TRow, TGenerated extends keyof TRow = never> = Omit<TRow, TGenerated> &
   Partial<Pick<TRow, TGenerated>>
-type UpdateFromRow<TRow> = Partial<TRow>
 type TableDef<TRow, TInsert = TRow, TUpdate = Partial<TRow>> = {
   Row: TRow & Record<string, unknown>
   Insert: TInsert & Record<string, unknown>

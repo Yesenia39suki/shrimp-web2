@@ -1,4 +1,5 @@
 -- 智慧虾投喂管理系统 Supabase 演示数据
+-- 仅供开发/演示时手动执行；注册触发器和前端注册流程都不会调用本文件。
 -- 执行前请先替换 target_organization_id / target_pond_id / target_robot_id。
 -- 本文件不会自动执行，也不写死真实用户 UUID。
 -- 说明：重复执行会追加 water_readings、feeding_records、shrimp_measurements 明细；

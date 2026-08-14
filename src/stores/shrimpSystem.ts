@@ -544,6 +544,7 @@ const initialRobots: RobotInfo[] = [
 const defaultPondProfile = initialPondProfiles[0]!
 const defaultOrganizationId = getDefaultOrganizationId()
 const defaultSystemData = getMockSystemData(defaultOrganizationId)
+let supabaseOrganizationLoadSequence = 0
 
 function isNumberValue(value: number | string): value is number {
   return typeof value === 'number' && Number.isFinite(value)
@@ -912,9 +913,9 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
   state: (): ShrimpSystemState => ({
     loading: false,
     error: '',
-    organizationId: defaultOrganizationId,
-    ponds: buildEditablePonds(defaultOrganizationId, defaultSystemData),
-    selectedPondId: defaultPondProfile.pondId,
+    organizationId: isSupabaseMode ? '' : defaultOrganizationId,
+    ponds: isSupabaseMode ? [] : buildEditablePonds(defaultOrganizationId, defaultSystemData),
+    selectedPondId: isSupabaseMode ? '' : defaultPondProfile.pondId,
     waterLatest: {},
     waterDailyStats: {},
     shrimpMeasurements: {},
@@ -922,26 +923,39 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
     alerts: [],
     devices: [],
     snapshots: [],
-    businessConfig: defaultSystemData.businessConfig,
-    editablePonds: buildEditablePonds(defaultOrganizationId, defaultSystemData),
-    editableRobots: buildEditableRobots(defaultOrganizationId, defaultSystemData),
-    waterThresholdsByPond: buildThresholdsByPond(
-      defaultOrganizationId,
-      defaultSystemData.pondConfig.pondIds,
-      defaultSystemData.thresholds.water,
-    ),
+    businessConfig: isSupabaseMode
+      ? {
+          organization_id: '',
+          pond: emptyPond(''),
+          robot: emptyRobot('', ''),
+          waterThreshold: emptyThreshold('', ''),
+        }
+      : defaultSystemData.businessConfig,
+    editablePonds: isSupabaseMode
+      ? []
+      : buildEditablePonds(defaultOrganizationId, defaultSystemData),
+    editableRobots: isSupabaseMode
+      ? []
+      : buildEditableRobots(defaultOrganizationId, defaultSystemData),
+    waterThresholdsByPond: isSupabaseMode
+      ? {}
+      : buildThresholdsByPond(
+          defaultOrganizationId,
+          defaultSystemData.pondConfig.pondIds,
+          defaultSystemData.thresholds.water,
+        ),
     robotStatusById: {},
     systemMeta: {
       systemName: '虾群养殖投喂系统',
       logoText: 'UpcShrimpFeeding',
-      online: true,
-      currentPondId: defaultPondProfile.pondId,
-      currentStatus: defaultPondProfile.systemStatus,
+      online: !isSupabaseMode,
+      currentPondId: isSupabaseMode ? '' : defaultPondProfile.pondId,
+      currentStatus: isSupabaseMode ? '暂无数据' : defaultPondProfile.systemStatus,
     },
-    pondProfiles: initialPondProfiles,
-    waterMetrics: cloneMetrics(defaultPondProfile.waterMetrics),
-    shrimpMetrics: cloneMetrics(defaultPondProfile.shrimpMetrics),
-    robots: initialRobots,
+    pondProfiles: isSupabaseMode ? [] : initialPondProfiles,
+    waterMetrics: isSupabaseMode ? [] : cloneMetrics(defaultPondProfile.waterMetrics),
+    shrimpMetrics: isSupabaseMode ? [] : cloneMetrics(defaultPondProfile.shrimpMetrics),
+    robots: isSupabaseMode ? [] : initialRobots,
     thresholds: {
       water: {
         temperature: { min: 20, max: 35 },
@@ -973,11 +987,11 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       },
     },
     pondConfig: {
-      pondIds: initialPondProfiles.map((profile) => profile.pondId),
-      selectedPondId: defaultPondProfile.pondId,
+      pondIds: isSupabaseMode ? [] : initialPondProfiles.map((profile) => profile.pondId),
+      selectedPondId: isSupabaseMode ? '' : defaultPondProfile.pondId,
     },
     shrimpConfig: {
-      species: '南美白对虾、斑节对虾、日本囊对虾',
+      species: isSupabaseMode ? '暂无' : '南美白对虾、斑节对虾、日本囊对虾',
       targetRanges: {
         length: { min: 6, max: 13 },
         weight: { min: 8, max: 20 },
@@ -985,11 +999,13 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       },
     },
     robotConfig: {
-      robots: initialRobots.map((robot) => ({
-        id: robot.id,
-        name: robot.name,
-        pondId: robot.pondId,
-      })),
+      robots: isSupabaseMode
+        ? []
+        : initialRobots.map((robot) => ({
+            id: robot.id,
+            name: robot.name,
+            pondId: robot.pondId,
+          })),
     },
   }),
   getters: {
@@ -1154,6 +1170,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
   },
   actions: {
     async loadSupabaseOrganizationData(organizationId: string) {
+      const loadSequence = ++supabaseOrganizationLoadSequence
       this.loading = true
       this.error = ''
       this.organizationId = organizationId
@@ -1183,7 +1200,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
         ])
         const selectedPond =
           ponds.find((pond) => pond.pond_code === this.pondConfig.selectedPondId) ?? ponds[0]
-        const selectedPondCode = selectedPond?.pond_code ?? '暂无'
+        const selectedPondCode = selectedPond?.pond_code ?? ''
         const pondCodeByUuid = new Map(ponds.map((pond) => [pond.id, pond.pond_code]))
         const editableRobots = robots.map((robot) => ({
           ...robot,
@@ -1276,6 +1293,10 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
         const selectedBusinessPond = selectedPond ?? emptyPond(organizationId)
         const selectedProfile = profiles.find((profile) => profile.pondId === selectedPondCode)
 
+        if (loadSequence !== supabaseOrganizationLoadSequence) {
+          return
+        }
+
         this.ponds = cloneData(ponds)
         this.editablePonds = cloneData(ponds)
         this.editableRobots = cloneData(editableRobots)
@@ -1330,10 +1351,16 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
         }
         this.selectPond(selectedPondCode)
       } catch (error) {
+        if (loadSequence !== supabaseOrganizationLoadSequence) {
+          return
+        }
+
         this.error = error instanceof Error ? error.message : '数据库连接失败'
         throw error
       } finally {
-        this.loading = false
+        if (loadSequence === supabaseOrganizationLoadSequence) {
+          this.loading = false
+        }
       }
     },
     async loadOrganizationData(organizationId: string) {
@@ -1359,7 +1386,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
         : defaultRobots
       const waterThresholdsByPond = {
         ...defaultThresholdsByPond,
-        ...(savedEditableConfig?.waterThresholdsByPond ?? {}),
+        ...savedEditableConfig?.waterThresholdsByPond,
       }
       const selectedPondId =
         savedEditableConfig?.selectedPondId &&
@@ -1503,7 +1530,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
           ? selectedPondId
           : (pondCodes[0] ?? this.pondConfig.selectedPondId)
 
-      this.pondProfiles = this.editablePonds.map((pond, index) => {
+      this.pondProfiles = this.editablePonds.map((pond) => {
         const sourceProfile = profileByPondId.get(pond.pond_code) ?? fallbackProfile
 
         return {

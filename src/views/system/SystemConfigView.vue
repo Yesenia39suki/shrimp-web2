@@ -67,7 +67,7 @@ const thresholdFields: Array<{
 const robotTypes = ['投喂巡检型', '水质采样型', '增氧联动型', '料台观察型']
 
 const canEdit = computed(() => authStore.canEditBusinessConfig)
-const permissionText = computed(() => (canEdit.value ? '可保存配置' : '当前账号仅有查看权限'))
+const canDelete = computed(() => authStore.canDeleteBusinessConfig)
 const organizationName = computed(() => authStore.currentOrganization?.name ?? '未选择企业')
 const selectedPond = computed(
   () =>
@@ -85,6 +85,22 @@ const activeSectionIndex = computed(() =>
 const activeSectionInfo = computed(
   () => configSections[activeSectionIndex.value] ?? configSections[0],
 )
+const canSave = computed(() => {
+  if (activeSection.value === 'security') return canDelete.value
+  if (!canEdit.value) return false
+  if (activeSection.value === 'pond') return Boolean(selectedPond.value)
+  if (activeSection.value === 'robot') return Boolean(selectedRobot.value)
+  return Boolean(selectedPond.value)
+})
+const permissionText = computed(() => {
+  if (!canEdit.value) return '当前账号仅有查看权限'
+  if (activeSection.value === 'security' && !canDelete.value) {
+    return '企业信息仅所有者或管理员可修改'
+  }
+  if (activeSection.value === 'robot' && !selectedRobot.value) return '请先新增机器人'
+  if (activeSection.value !== 'security' && !selectedPond.value) return '请先新增池塘'
+  return '可保存配置'
+})
 
 const summaryCards = computed(() => [
   { label: '企业', value: organizationName.value },
@@ -159,6 +175,9 @@ function syncPondFormFromSelection() {
     form.waterThreshold = cloneValue(
       store.waterThresholdsByPond[pond.pond_code] ?? store.businessConfig.waterThreshold,
     )
+  } else {
+    form.pond = cloneValue(store.businessConfig.pond)
+    form.waterThreshold = cloneValue(store.businessConfig.waterThreshold)
   }
 }
 
@@ -168,6 +187,9 @@ function syncRobotFormFromSelection() {
   if (robot) {
     Object.assign(robotForm, cloneValue(robot))
     form.robot = cloneValue(robot)
+  } else {
+    Object.assign(robotForm, cloneValue(store.businessConfig.robot))
+    form.robot = cloneValue(store.businessConfig.robot)
   }
 }
 
@@ -176,8 +198,8 @@ async function handleSave() {
     return
   }
 
-  if (!canEdit.value) {
-    saveMessage.value = '当前账号仅有查看权限'
+  if (!canSave.value) {
+    saveMessage.value = permissionText.value
     return
   }
 
@@ -267,8 +289,8 @@ async function handleAddPond() {
 }
 
 async function handleDeletePond() {
-  if (!canEdit.value) {
-    saveMessage.value = '当前账号仅有查看权限'
+  if (!canDelete.value) {
+    saveMessage.value = '删除操作仅限所有者或管理员'
     return
   }
 
@@ -299,8 +321,8 @@ async function handleAddRobot() {
 }
 
 async function handleDeleteRobot() {
-  if (!canEdit.value) {
-    saveMessage.value = '当前账号仅有查看权限'
+  if (!canDelete.value) {
+    saveMessage.value = '删除操作仅限所有者或管理员'
     return
   }
 
@@ -338,11 +360,11 @@ function goNextSection() {
           <strong>{{ organizationName }}</strong>
           <em>{{ authStore.currentRoleText }}</em>
         </div>
-        <button type="button" :disabled="!canEdit || isSaving" @click="handleSave">保存</button>
+        <button type="button" :disabled="!canSave || isSaving" @click="handleSave">保存</button>
         <button type="button" class="ghost" @click="handleReset">重置</button>
         <span
           :class="{
-            warning: !canEdit,
+            warning: !canSave,
             success: saveMessage === '配置已保存' || saveMessage === '企业信息已保存',
           }"
         >
@@ -375,7 +397,7 @@ function goNextSection() {
             <span>{{ activeSectionInfo.description }}</span>
           </div>
           <div v-if="activeSection === 'pond'" class="panel-tools">
-            <select v-model="selectedPondCode" :disabled="!canEdit">
+            <select v-model="selectedPondCode" :disabled="store.loading">
               <option v-for="pond in store.editablePonds" :key="pond.id" :value="pond.pond_code">
                 {{ pond.pond_code }} / {{ pond.pond_name }}
               </option>
@@ -386,32 +408,36 @@ function goNextSection() {
             <button
               type="button"
               class="danger"
-              :disabled="!canEdit || isSaving"
+              :disabled="!canDelete || isSaving || !selectedPond"
               @click="handleDeletePond"
             >
               删除
             </button>
           </div>
           <div v-else-if="activeSection === 'robot'" class="panel-tools">
-            <select v-model="selectedRobotId" :disabled="!canEdit">
+            <select v-model="selectedRobotId" :disabled="store.loading">
               <option v-for="robot in store.editableRobots" :key="robot.id" :value="robot.id">
                 {{ robot.robot_code }} / {{ robot.robot_name }}
               </option>
             </select>
-            <button type="button" :disabled="!canEdit || isSaving" @click="handleAddRobot">
+            <button
+              type="button"
+              :disabled="!canEdit || isSaving || store.editablePonds.length === 0"
+              @click="handleAddRobot"
+            >
               新增
             </button>
             <button
               type="button"
               class="danger"
-              :disabled="!canEdit || isSaving"
+              :disabled="!canDelete || isSaving || !selectedRobot"
               @click="handleDeleteRobot"
             >
               删除
             </button>
           </div>
           <div v-else-if="activeSection === 'threshold'" class="panel-tools">
-            <select v-model="selectedPondCode" :disabled="!canEdit">
+            <select v-model="selectedPondCode" :disabled="store.loading">
               <option v-for="pond in store.editablePonds" :key="pond.id" :value="pond.pond_code">
                 {{ pond.pond_code }} / {{ pond.pond_name }}
               </option>

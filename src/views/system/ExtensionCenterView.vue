@@ -65,6 +65,7 @@ const devices = ref<Device[]>([])
 const aiLogs = ref<AiRequestLog[]>([])
 const alertExplanation = ref('')
 let robotPositionSubscriptionId = ''
+let extensionLoadSequence = 0
 
 const modelConfig = reactive<AiModelConfig>({
   id: '',
@@ -93,14 +94,17 @@ const commandButtons: Array<{ type: RobotCommandType; label: string }> = [
   { type: 'charge', label: '返回充电' },
 ]
 
-const organizationId = computed(
-  () => authStore.currentOrganization?.id ?? systemStore.organizationId,
-)
+const organizationId = computed(() => authStore.currentOrganization?.id ?? '')
 const organizationName = computed(() => authStore.currentOrganization?.name ?? '未选择企业')
 const pondId = computed(() => systemStore.pondConfig.selectedPondId)
 const robotId = computed(() => systemStore.robots[0]?.id ?? '')
 const currentRobot = computed(() => systemStore.robots.find((robot) => robot.id === robotId.value))
-const canOperate = computed(() => authStore.currentRole !== 'viewer')
+const canOperate = computed(
+  () =>
+    authStore.currentRole === 'owner' ||
+    authStore.currentRole === 'admin' ||
+    authStore.currentRole === 'operator',
+)
 const permissionText = computed(() => (canOperate.value ? '可操作' : '当前账号仅有查看权限'))
 const alerts = computed(() => systemStore.allAlerts)
 
@@ -190,7 +194,33 @@ async function loadOrFallback<T>(loader: () => Promise<T>, fallback: T, message:
 }
 
 async function loadExtensionData() {
+  const loadSequence = ++extensionLoadSequence
+  robotPosition.value = null
+  robotTrack.value = []
+  aiEvaluation.value = null
+  aiAdvice.value = null
+  riskResult.value = null
+  feedingPlans.value = []
+  feedingTasks.value = []
+  feedingRecords.value = []
+  devices.value = []
+  aiLogs.value = []
+  alertExplanation.value = ''
+  Object.assign(modelConfig, {
+    id: '',
+    organizationId: organizationId.value,
+    providerType: 'rule_engine',
+    modelName: '规则评分模型',
+    endpointUrl: undefined,
+    jsonOutput: true,
+    dailyLimit: 200,
+    monthlyUsage: 0,
+    enabled: true,
+  } satisfies AiModelConfig)
+
   if (!organizationId.value || !pondId.value) {
+    loading.value = false
+    actionMessage.value = ''
     return
   }
 
@@ -276,6 +306,10 @@ async function loadExtensionData() {
         : Promise.resolve(null),
     ])
 
+    if (loadSequence !== extensionLoadSequence) {
+      return
+    }
+
     robotPosition.value = latestPosition
     robotTrack.value = track.points
     aiEvaluation.value = evaluation
@@ -297,7 +331,9 @@ async function loadExtensionData() {
           })
         : null
   } finally {
-    loading.value = false
+    if (loadSequence === extensionLoadSequence) {
+      loading.value = false
+    }
   }
 }
 

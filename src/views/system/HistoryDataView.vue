@@ -48,6 +48,7 @@ const remoteRows = ref<HistoryRow[]>([])
 const remoteComparisonSeries = ref<PondComparisonSeries[]>([])
 let lineChart: echarts.ECharts | null = null
 let barChart: echarts.ECharts | null = null
+let historyLoadSequence = 0
 
 const rangeOptions: Array<{ id: HistoryRange; label: string }> = [
   { id: '7d', label: '近7天' },
@@ -67,7 +68,7 @@ const rangeLabels = computed(() => {
   return ['前6日', '前5日', '前4日', '前3日', '前2日', '昨日', '今日']
 })
 
-const organizationId = computed(() => authStore.currentOrganization?.id ?? store.organizationId)
+const organizationId = computed(() => authStore.currentOrganization?.id ?? '')
 
 function activeTimeRange() {
   const days = activeRange.value === '3m' ? 90 : activeRange.value === '30d' ? 30 : 7
@@ -454,12 +455,22 @@ function buildChartOption(type: 'line' | 'bar'): echarts.EChartsOption {
 }
 
 async function loadHistoryData() {
-  if (!isSupabaseMode || !organizationId.value || !selectedPondId.value) {
+  if (!isSupabaseMode) {
+    return
+  }
+
+  const loadSequence = ++historyLoadSequence
+  remoteRows.value = []
+  remoteComparisonSeries.value = []
+  loadError.value = ''
+
+  if (!organizationId.value || !selectedPondId.value) {
+    loading.value = false
+    nextTick(renderCharts)
     return
   }
 
   loading.value = true
-  loadError.value = ''
 
   try {
     const timeRange = activeTimeRange()
@@ -487,15 +498,25 @@ async function loadHistoryData() {
         : Promise.resolve([]),
     ])
 
+    if (loadSequence !== historyLoadSequence) {
+      return
+    }
+
     remoteRows.value = rows
     remoteComparisonSeries.value = comparison
   } catch (error) {
+    if (loadSequence !== historyLoadSequence) {
+      return
+    }
+
     remoteRows.value = []
     remoteComparisonSeries.value = []
     loadError.value = error instanceof Error ? error.message : '历史数据加载失败'
   } finally {
-    loading.value = false
-    nextTick(renderCharts)
+    if (loadSequence === historyLoadSequence) {
+      loading.value = false
+      nextTick(renderCharts)
+    }
   }
 }
 
