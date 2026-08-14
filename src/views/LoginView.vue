@@ -3,7 +3,6 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import QingdaoMapBackground from '@/components/system/QingdaoMapBackground.vue'
-import { MOCK_DEMO_ACCOUNTS } from '@/services/mockDataService'
 import { useAuthStore } from '@/stores/authStore'
 
 const router = useRouter()
@@ -91,14 +90,6 @@ async function handleRegister() {
   }
 }
 
-function fillDemoAccount(account: (typeof MOCK_DEMO_ACCOUNTS)[number]) {
-  mode.value = 'login'
-  email.value = account.email
-  password.value = account.password
-  errorMessage.value = ''
-  infoMessage.value = ''
-}
-
 function switchMode(nextMode: 'login' | 'register') {
   mode.value = nextMode
   errorMessage.value = ''
@@ -153,19 +144,6 @@ function switchMode(nextMode: 'login' | 'register') {
 
         <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
         <p v-if="infoMessage" class="info-message">{{ infoMessage }}</p>
-
-        <div class="demo-account">
-          <strong>演示账号</strong>
-          <button
-            v-for="account in MOCK_DEMO_ACCOUNTS"
-            :key="account.email"
-            type="button"
-            @click="fillDemoAccount(account)"
-          >
-            {{ account.label }}：{{ account.email }} / {{ account.password }}
-          </button>
-          <span>A账户与B账户的数据互相隔离，彼此不可见。</span>
-        </div>
 
         <button type="button" class="text-button" @click="switchMode('register')">
           注册新企业账号
@@ -440,22 +418,6 @@ button:disabled {
   border: 1px solid rgba(105, 226, 164, 0.2);
 }
 
-.demo-account {
-  display: grid;
-  gap: 6px;
-  padding: 11px 12px;
-  color: var(--text-muted);
-  font-size: 12px;
-  background: rgba(16, 54, 138, 0.18);
-  border: 1px solid rgba(121, 210, 255, 0.12);
-}
-
-.demo-account strong {
-  color: var(--text-main);
-  font-size: 13px;
-}
-
-.demo-account button,
 .text-button {
   height: auto;
   min-height: 30px;
@@ -468,7 +430,6 @@ button:disabled {
   border: 1px solid rgba(121, 210, 255, 0.14);
 }
 
-.demo-account button:hover,
 .text-button:hover {
   border-color: rgba(121, 210, 255, 0.32);
 }

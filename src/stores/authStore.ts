@@ -104,7 +104,7 @@ export const useAuthStore = defineStore('auth', {
         if (!session) {
           return {
             success: false,
-            message: '邮箱或密码错误，请使用演示账号登录。',
+            message: '邮箱或密码错误，请检查后重试。',
           }
         }
 
