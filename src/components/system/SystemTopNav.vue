@@ -54,8 +54,8 @@ function updateTime() {
   )}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
 }
 
-function handleLogout() {
-  authStore.logout()
+async function handleLogout() {
+  await authStore.logout()
   router.replace('/login')
 }
 

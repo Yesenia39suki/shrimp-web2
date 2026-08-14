@@ -2,6 +2,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 
+import { isSupabaseMode } from '@/config/dataSource'
+import { getPondMetricComparison, type PondComparisonSeries } from '@/services/comparisonService'
+import { getHistoryRows } from '@/services/historyDataService'
 import { useAuthStore } from '@/stores/authStore'
 import { useShrimpSystemStore } from '@/stores/shrimpSystem'
 import type { SystemMetric } from '@/stores/shrimpSystem'
@@ -39,8 +42,13 @@ const waterCompareMetric = ref('temperature')
 const shrimpCompareMetric = ref('length')
 const lineChartRef = ref<HTMLDivElement | null>(null)
 const barChartRef = ref<HTMLDivElement | null>(null)
+const loading = ref(false)
+const loadError = ref('')
+const remoteRows = ref<HistoryRow[]>([])
+const remoteComparisonSeries = ref<PondComparisonSeries[]>([])
 let lineChart: echarts.ECharts | null = null
 let barChart: echarts.ECharts | null = null
+let historyLoadSequence = 0
 
 const rangeOptions: Array<{ id: HistoryRange; label: string }> = [
   { id: '7d', label: '近7天' },
@@ -59,6 +67,16 @@ const rangeLabels = computed(() => {
 
   return ['前6日', '前5日', '前4日', '前3日', '前2日', '昨日', '今日']
 })
+
+const organizationId = computed(() => authStore.currentOrganization?.id ?? '')
+
+function activeTimeRange() {
+  const days = activeRange.value === '3m' ? 90 : activeRange.value === '30d' ? 30 : 7
+  return {
+    startAt: new Date(Date.now() - days * 24 * 60 * 60_000).toISOString(),
+    endAt: new Date().toISOString(),
+  }
+}
 
 const categories: Array<{
   id: HistoryCategory
@@ -256,7 +274,9 @@ const rowsByCategory = computed<Record<HistoryCategory, HistoryRow[]>>(() => ({
   config: configRows.value,
 }))
 
-const activeRows = computed(() => rowsByCategory.value[activeCategory.value])
+const activeRows = computed(() =>
+  isSupabaseMode ? remoteRows.value : rowsByCategory.value[activeCategory.value],
+)
 const activeCategoryInfo = computed(
   () => categories.find((category) => category.id === activeCategory.value) ?? categories[0]!,
 )
@@ -277,6 +297,10 @@ const isComparableCategory = computed(
 )
 
 const chartAxisLabels = computed(() => {
+  if (isSupabaseMode && isComparableCategory.value) {
+    return remoteComparisonSeries.value[0]?.points.map((point) => point.time) ?? []
+  }
+
   if (activeCategory.value === 'config') {
     return store.editablePonds.map((pond) => pond.pond_code)
   }
@@ -285,6 +309,31 @@ const chartAxisLabels = computed(() => {
 })
 
 const chartSeries = computed(() => {
+  if (isSupabaseMode && isComparableCategory.value) {
+    return remoteComparisonSeries.value.map((series) => ({
+      name: `${series.pondId} / ${series.label}`,
+      unit: series.unit,
+      data: series.points.map((point) => point.value),
+    }))
+  }
+
+  if (isSupabaseMode) {
+    const numericRows = activeRows.value
+      .map((row) => ({
+        time: row.time,
+        value: Number.parseFloat(row.value),
+      }))
+      .filter((row) => Number.isFinite(row.value))
+
+    return [
+      {
+        name: activeCategoryInfo.value.title,
+        unit: '',
+        data: numericRows.map((row) => row.value),
+      },
+    ]
+  }
+
   if (activeCategory.value === 'water') {
     return buildPondCompareSeries('water', waterCompareMetric.value)
   }
@@ -405,6 +454,72 @@ function buildChartOption(type: 'line' | 'bar'): echarts.EChartsOption {
   }
 }
 
+async function loadHistoryData() {
+  if (!isSupabaseMode) {
+    return
+  }
+
+  const loadSequence = ++historyLoadSequence
+  remoteRows.value = []
+  remoteComparisonSeries.value = []
+  loadError.value = ''
+
+  if (!organizationId.value || !selectedPondId.value) {
+    loading.value = false
+    nextTick(renderCharts)
+    return
+  }
+
+  loading.value = true
+
+  try {
+    const timeRange = activeTimeRange()
+    const metricKey =
+      activeCategory.value === 'water' ? waterCompareMetric.value : shrimpCompareMetric.value
+    const comparisonCategory =
+      activeCategory.value === 'water' || activeCategory.value === 'shrimp'
+        ? activeCategory.value
+        : 'water'
+    const [rows, comparison] = await Promise.all([
+      getHistoryRows({
+        organizationId: organizationId.value,
+        pondId: selectedPondId.value,
+        category: activeCategory.value,
+        timeRange,
+      }),
+      isComparableCategory.value
+        ? getPondMetricComparison({
+            organizationId: organizationId.value,
+            pondIds: Array.from(new Set([comparePondA.value, comparePondB.value])).filter(Boolean),
+            category: comparisonCategory,
+            metricKey,
+            timeRange,
+          })
+        : Promise.resolve([]),
+    ])
+
+    if (loadSequence !== historyLoadSequence) {
+      return
+    }
+
+    remoteRows.value = rows
+    remoteComparisonSeries.value = comparison
+  } catch (error) {
+    if (loadSequence !== historyLoadSequence) {
+      return
+    }
+
+    remoteRows.value = []
+    remoteComparisonSeries.value = []
+    loadError.value = error instanceof Error ? error.message : '历史数据加载失败'
+  } finally {
+    if (loadSequence === historyLoadSequence) {
+      loading.value = false
+      nextTick(renderCharts)
+    }
+  }
+}
+
 function renderCharts() {
   if (!lineChartRef.value || !barChartRef.value || !hasChartData.value) {
     return
@@ -442,6 +557,25 @@ watch(
   () => {
     nextTick(renderCharts)
   },
+)
+
+watch(
+  () =>
+    JSON.stringify({
+      source: isSupabaseMode,
+      organizationId: organizationId.value,
+      category: activeCategory.value,
+      range: activeRange.value,
+      pond: selectedPondId.value,
+      compareA: comparePondA.value,
+      compareB: comparePondB.value,
+      waterMetric: waterCompareMetric.value,
+      shrimpMetric: shrimpCompareMetric.value,
+    }),
+  () => {
+    void loadHistoryData()
+  },
+  { immediate: true },
 )
 
 watch(
@@ -526,7 +660,7 @@ onBeforeUnmount(() => {
         <div class="panel-title">
           <div>
             <strong>{{ activeCategoryInfo.title }}</strong>
-            <span>{{ activeCategoryInfo.desc }}</span>
+            <span>{{ loadError || (loading ? '加载中' : activeCategoryInfo.desc) }}</span>
           </div>
           <div class="panel-controls">
             <div class="range-tabs">

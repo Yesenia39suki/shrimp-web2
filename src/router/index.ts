@@ -106,9 +106,9 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const authStore = useAuthStore()
-  authStore.loadMockSession()
+  await authStore.loadMockSession()
 
   if (to.meta.public && authStore.isLoggedIn) {
     return '/system'

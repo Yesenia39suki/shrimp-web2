@@ -1,4 +1,12 @@
 import { API_ENDPOINTS } from '@/constants/apiEndpoints'
+import { isSupabaseMode } from '@/config/dataSource'
+import { supabase } from '@/lib/supabase'
+import {
+  mapRobotCommandAckRow,
+  mapRobotCommandRow,
+} from '@/services/mappers/robotMapper'
+import { resolvePondUuid, resolveRobotUuid, throwSupabaseError } from '@/services/supabaseHelpers'
+import type { Inserts, Json } from '@/types/database'
 import type {
   RobotCommand,
   RobotCommandAck,
@@ -47,21 +55,41 @@ export async function createRobotCommand(
     status?: RobotCommandStatus
   },
 ): Promise<RobotCommand> {
-  // TODO: 后续调用 API_ENDPOINTS.robotControl.createRobotCommand，由后端验权、写 robot_commands、下发 MQTT。
+  if (!isSupabaseMode) {
+    const nextCommand: RobotCommand = {
+      id: `command-${Date.now()}`,
+      organizationId,
+      pondId: command.pondId,
+      robotId,
+      type: command.type,
+      status: command.status ?? 'pending',
+      payload: command.payload,
+      createdBy: command.createdBy,
+      createdAt: new Date().toISOString(),
+    }
+    getCommandsByKey(organizationId, robotId).unshift(nextCommand)
+    return Promise.resolve(nextCommand)
+  }
+
   void API_ENDPOINTS.robotControl.createRobotCommand
-  const nextCommand: RobotCommand = {
-    id: `command-${Date.now()}`,
-    organizationId,
-    pondId: command.pondId,
-    robotId,
+  const robotUuid = await resolveRobotUuid(organizationId, robotId)
+  const pondUuid = command.pondId ? await resolvePondUuid(organizationId, command.pondId) : null
+  const row: Inserts<'robot_commands'> = {
+    organization_id: organizationId,
+    pond_id: pondUuid,
+    robot_id: robotUuid,
     type: command.type,
     status: command.status ?? 'pending',
-    payload: command.payload,
-    createdBy: command.createdBy,
-    createdAt: new Date().toISOString(),
+    payload: JSON.parse(JSON.stringify(command.payload ?? {})) as Json,
+    created_by: command.createdBy ?? null,
   }
-  getCommandsByKey(organizationId, robotId).unshift(nextCommand)
-  return Promise.resolve(nextCommand)
+  const { data, error } = await supabase.from('robot_commands').insert(row).select('*').single()
+
+  if (error) {
+    throwSupabaseError(error, '创建机器人指令失败')
+  }
+
+  return mapRobotCommandRow(data)
 }
 
 export async function getRobotCommands(
@@ -69,58 +97,141 @@ export async function getRobotCommands(
   robotId: string,
   filters: RobotCommandFilters = {},
 ): Promise<RobotCommand[]> {
-  const commands = getCommandsByKey(organizationId, robotId)
-  return Promise.resolve(
-    commands.filter((command) => {
-      if (filters.status && command.status !== filters.status) return false
-      if (filters.type && command.type !== filters.type) return false
-      return true
-    }),
-  )
+  if (!isSupabaseMode) {
+    const commands = getCommandsByKey(organizationId, robotId)
+    return Promise.resolve(
+      commands.filter((command) => {
+        if (filters.status && command.status !== filters.status) return false
+        if (filters.type && command.type !== filters.type) return false
+        return true
+      }),
+    )
+  }
+
+  const robotUuid = await resolveRobotUuid(organizationId, robotId)
+  let query = supabase
+    .from('robot_commands')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .eq('robot_id', robotUuid)
+    .order('created_at', { ascending: false })
+
+  if (filters.status) query = query.eq('status', filters.status)
+  if (filters.type) query = query.eq('type', filters.type)
+
+  const { data, error } = await query
+
+  if (error) {
+    throwSupabaseError(error, '读取机器人指令失败')
+  }
+
+  return (data ?? []).map(mapRobotCommandRow)
 }
 
 export async function getRobotCommandStatus(
   organizationId: string,
   commandId: string,
 ): Promise<RobotCommandStatus> {
-  // TODO: 后续调用 /functions/v1/get-robot-command-status。
-  const command = Array.from(commandStore.values())
-    .flat()
-    .find((item) => item.organizationId === organizationId && item.id === commandId)
-  return Promise.resolve(command?.status ?? 'pending')
+  if (!isSupabaseMode) {
+    const command = Array.from(commandStore.values())
+      .flat()
+      .find((item) => item.organizationId === organizationId && item.id === commandId)
+    return Promise.resolve(command?.status ?? 'pending')
+  }
+
+  void API_ENDPOINTS.robotControl.getRobotCommandStatus
+  const { data, error } = await supabase
+    .from('robot_commands')
+    .select('status')
+    .eq('organization_id', organizationId)
+    .eq('id', commandId)
+    .single()
+
+  if (error) {
+    throwSupabaseError(error, '读取机器人指令状态失败')
+  }
+
+  return data.status
 }
 
 export async function cancelRobotCommand(
   organizationId: string,
   commandId: string,
 ): Promise<RobotCommand> {
-  // TODO: 后续调用 /functions/v1/cancel-robot-command，并写 audit_logs。
-  const command = Array.from(commandStore.values())
-    .flat()
-    .find((item) => item.organizationId === organizationId && item.id === commandId)
+  if (!isSupabaseMode) {
+    const command = Array.from(commandStore.values())
+      .flat()
+      .find((item) => item.organizationId === organizationId && item.id === commandId)
 
-  if (!command) {
-    return Promise.reject(new Error('未找到机器人指令'))
+    if (!command) {
+      return Promise.reject(new Error('未找到机器人指令'))
+    }
+
+    command.status = 'cancelled'
+    return Promise.resolve(command)
   }
 
-  command.status = 'cancelled'
-  return Promise.resolve(command)
+  void API_ENDPOINTS.robotControl.cancelRobotCommand
+  const { data, error } = await supabase
+    .from('robot_commands')
+    .update({ status: 'cancelled' })
+    .eq('organization_id', organizationId)
+    .eq('id', commandId)
+    .select('*')
+    .single()
+
+  if (error) {
+    throwSupabaseError(error, '取消机器人指令失败')
+  }
+
+  return mapRobotCommandRow(data)
 }
 
 export async function receiveRobotCommandAck(payload: RobotCommandAck): Promise<RobotCommandAck> {
-  // TODO: 后续由 /functions/v1/robot-command-ack 接收机器人小车回执。
-  const command = Array.from(commandStore.values())
-    .flat()
-    .find((item) => item.organizationId === payload.organizationId && item.id === payload.commandId)
+  if (!isSupabaseMode) {
+    const command = Array.from(commandStore.values())
+      .flat()
+      .find((item) => item.organizationId === payload.organizationId && item.id === payload.commandId)
 
-  if (command) {
-    command.status = payload.status
+    if (command) {
+      command.status = payload.status
+    }
+
+    return Promise.resolve({
+      ...payload,
+      acknowledgedAt: payload.acknowledgedAt || new Date().toISOString(),
+    })
   }
 
-  return Promise.resolve({
-    ...payload,
-    acknowledgedAt: payload.acknowledgedAt || new Date().toISOString(),
-  })
+  const robotUuid = await resolveRobotUuid(payload.organizationId, payload.robotId)
+  const acknowledgedAt = payload.acknowledgedAt || new Date().toISOString()
+  const ackRow: Inserts<'robot_command_acks'> = {
+    organization_id: payload.organizationId,
+    robot_id: robotUuid,
+    command_id: payload.commandId,
+    status: payload.status,
+    message: payload.message,
+    acknowledged_at: acknowledgedAt,
+  }
+
+  const [{ error: updateError }, { data, error: insertError }] = await Promise.all([
+    supabase
+      .from('robot_commands')
+      .update({ status: payload.status })
+      .eq('organization_id', payload.organizationId)
+      .eq('id', payload.commandId),
+    supabase.from('robot_command_acks').insert(ackRow).select('*').single(),
+  ])
+
+  if (updateError) {
+    throwSupabaseError(updateError, '更新机器人指令状态失败')
+  }
+
+  if (insertError) {
+    throwSupabaseError(insertError, '写入机器人回执失败')
+  }
+
+  return mapRobotCommandAckRow(data)
 }
 
 export async function mockSendCommand(
@@ -138,19 +249,21 @@ export async function mockSendCommand(
     type: command.type,
     payload: command.payload ?? {},
     createdBy: command.createdBy,
-    status: 'sent',
+    status: isSupabaseMode ? 'pending' : 'sent',
   })
 
-  window.setTimeout(() => {
-    void receiveRobotCommandAck({
-      organizationId,
-      robotId,
-      commandId: created.id,
-      status: 'success',
-      message: 'mock 指令已完成',
-      acknowledgedAt: new Date().toISOString(),
-    })
-  }, 500)
+  if (!isSupabaseMode) {
+    window.setTimeout(() => {
+      void receiveRobotCommandAck({
+        organizationId,
+        robotId,
+        commandId: created.id,
+        status: 'success',
+        message: 'mock 指令已完成',
+        acknowledgedAt: new Date().toISOString(),
+      })
+    }, 500)
+  }
 
   return created
 }

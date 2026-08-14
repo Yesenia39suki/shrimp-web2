@@ -64,9 +64,10 @@ const metricSummaryRows = computed(() => [
 const maturityRows = computed(() => {
   return store.pondProfiles.map((profile) => {
     const maturityMetric = profile.shrimpMetrics.find((item) => item.key === 'maturity')
+    const value = Number(maturityMetric?.value)
     return {
       pondId: profile.pondId,
-      value: Number(maturityMetric?.value ?? 0),
+      value: Number.isFinite(value) ? value : 0,
     }
   })
 })

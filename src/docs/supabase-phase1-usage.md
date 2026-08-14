@@ -1,14 +1,50 @@
 # Supabase 第一阶段 SQL 使用说明
 
-本文档说明 `src/docs/supabase-schema-phase1.sql` 的用途、执行顺序和注册默认数据逻辑。当前仍不接 Supabase 客户端，不删除 mock/localStorage。
+本文档说明 Supabase SQL 的用途、执行顺序、注册默认数据逻辑和前端环境变量。当前前端已支持 `mock` 与 `supabase` 两种数据源模式。
 
-## 1. 执行 SQL
+## 1. 数据库迁移方式
+
+当前项目已经初始化 Supabase CLI 标准目录。后续正式数据库变更以以下目录为准：
+
+`supabase/migrations`
+
+GitHub 与 Supabase 集成启用后，只会自动执行该目录内尚未应用的迁移。`src/docs` 中的 SQL 保留为完整结构说明、人工审计和紧急恢复参考，不再作为 GitHub 自动部署入口。
+
+当前标准迁移顺序为：
+
+1. `supabase/migrations/20260814064529_schema_phase1.sql`
+2. `supabase/migrations/20260814064535_full_integration.sql`
+3. `supabase/migrations/20260814064539_empty_organization_registration_and_tenant_guards.sql`
+
+前两份迁移用于完整重建新环境，也采用可重复执行写法兼容当前已经通过 SQL Editor 建立的远端结构。第三份迁移只更新注册初始化、函数执行权限和多租户组合外键，不会删除已有业务数据。项目的 `supabase/config.toml` 已关闭自动 Seed，GitHub 部署不得自动执行演示数据。
+
+迁移一旦在远端登记为已执行，后续不要修改对应的 `supabase/migrations` 文件；新的数据库变更必须新增更晚时间戳的迁移。
+
+对于从零创建的新 Supabase 项目，仍按以下顺序手动初始化基础结构：
 
 在 Supabase 项目中打开 SQL Editor，将以下文件内容完整复制进去执行：
 
 `src/docs/supabase-schema-phase1.sql`
 
 该 SQL 会创建第一阶段表结构、索引、`updated_at` 自动更新触发器、权限辅助函数和基础 RLS 策略。
+
+随后继续执行：
+
+`src/docs/supabase-migration-full-integration.sql`
+
+该 SQL 会补齐扩展页面和历史页面需要的表、索引、RLS、Realtime 可订阅表结构和统计 RPC。
+
+已经部署过旧版注册函数但尚未启用 GitHub 迁移的项目，再执行：
+
+`src/docs/supabase-migration-empty-organization-registration.sql`
+
+该幂等迁移只更新注册初始化和租户边界：新用户仅创建资料、企业和 owner 成员关系，不会删除老用户已有的池塘或其他业务数据。
+
+需要演示历史图表时，再手动执行：
+
+`src/docs/supabase-seed-demo-data.sql`
+
+执行前必须替换 SQL 顶部的 `target_organization_id` 和 `target_pond_id`，不要直接用占位 UUID。
 
 ## 2. Auth 注册触发器
 
@@ -26,9 +62,8 @@ execute function public.handle_new_auth_user();
 - `profiles`
 - `organizations`
 - `organization_members`
-- `ponds`
-- `robots`
-- `water_thresholds`
+
+注册触发器不会创建池塘、机器人、水质阈值、设备、监测、投喂、虾群、报警、AI 或 Demo 数据。新用户首次进入系统时得到空企业空间，池塘由用户在“自定义内容”中主动创建。
 
 注册时前端需要通过 `supabase.auth.signUp` 传入企业名称：
 
@@ -60,7 +95,7 @@ SQL 执行完成后，可以在 Supabase Dashboard 的 Authentication 中创建�
 }
 ```
 
-创建完成后无需再手动插入默认企业、池塘、机器人和阈值。触发器会自动完成默认数据初始化。
+创建完成后无需手动插入企业和成员关系。触发器只完成账号资料、空企业和 owner 身份初始化，不创建业务数据。
 
 ## 4. 已有用户补齐默认数据
 
@@ -73,13 +108,38 @@ select public.backfill_auth_users_default_data();
 该函数会遍历 `auth.users`：
 
 - 如果用户没有 `profiles`，自动创建。
-- 如果用户没有 `organization_members`，自动创建默认企业、成员、池塘、机器人和水质阈值。
+- 如果用户没有 `organization_members`，自动创建空企业并将该用户设为 `owner`。
 - 企业名称仍优先读取 `raw_user_meta_data.organization_name`。
 - 如果没有企业名称，则使用“用户昵称的智慧养殖企业”。
+- 不会为已有用户补建池塘、机器人、阈值或其他业务数据，也不会修改已有企业和正式数据。
 
-## 5. 第一阶段前端优先接入表
+## 5. 前端环境变量
 
-第一阶段 Vue 前端建议只先接以下表：
+本地 `.env.local` 示例：
+
+```env
+VITE_DATA_SOURCE=supabase
+VITE_SUPABASE_URL=https://你的项目.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=你的 publishable/anon key
+```
+
+兼容旧命名：
+
+```env
+VITE_SUPABASE_ANON_KEY=你的 anon key
+```
+
+前端只允许使用 publishable/anon key，不允许写入 `service_role` key 或任何模型 API Key。
+
+需要回到离线演示模式时：
+
+```env
+VITE_DATA_SOURCE=mock
+```
+
+## 6. 已接入的前端表
+
+当前前端 Supabase 模式已通过 service 层接入：
 
 1. `profiles`
 2. `organizations`
@@ -87,39 +147,37 @@ select public.backfill_auth_users_default_data();
 4. `ponds`
 5. `robots`
 6. `water_thresholds`
+7. `devices`
+8. `water_readings`
+9. `water_latest`
+10. `water_daily_stats`
+11. `feeding_records`
+12. `feeding_daily_stats`
+13. `shrimp_measurements`
+14. `shrimp_daily_stats`
+15. `alert_rules`
+16. `alerts`
+17. `pond_daily_snapshots`
 
-这几张表对应当前已经完成的登录、多企业、角色权限、自定义内容、池塘管理、机器人管理、水质阈值设置。
+补充迁移后还会接入：
 
-## 6. 暂时只建表、不接页面的表
+- `feeding_plans`
+- `feeding_tasks`
+- `robot_status`
+- `robot_position_latest`
+- `robot_position_history`
+- `robot_commands`
+- `robot_command_acks`
+- `ai_model_configs`
+- `risk_scores`
+- `ai_evaluations`
+- `ai_feeding_advices`
+- `ai_result_feedback`
+- `ai_request_logs`
+- `scene_configs`
+- `operation_logs`
 
-以下表第一阶段先创建，暂时不接 Vue 页面：
-
-- `devices`
-- `water_readings`
-- `water_latest`
-- `water_daily_stats`
-- `feeding_records`
-- `feeding_daily_stats`
-- `shrimp_measurements`
-- `shrimp_daily_stats`
-- `alert_rules`
-- `alerts`
-- `pond_daily_snapshots`
-
-这些表用于后续水质历史、历史数据对比、报警中心、设备管理、虾群生长统计、投喂统计和日快照。
-
-## 7. 历史数据页面后续接入顺序
-
-历史数据页面建议后续按这个顺序接：
-
-1. `water_readings`：水质折线图、柱状图、池塘间同指标对比。
-2. `water_daily_stats`：近 7 天、近 30 天、近 3 个月汇总数据。
-3. `feeding_records` 和 `feeding_daily_stats`：投喂历史和日统计。
-4. `shrimp_measurements` 和 `shrimp_daily_stats`：虾长、虾重、样本数量、生长趋势。
-5. `alerts`：报警历史、处理状态和报警数量趋势。
-6. `pond_daily_snapshots`：综合日报视图和跨模块汇总。
-
-## 8. RLS 权限说明
+## 7. RLS 权限说明
 
 SQL 已开启 RLS，并提供以下辅助函数：
 
@@ -137,6 +195,16 @@ SQL 已开启 RLS，并提供以下辅助函数：
 - `profiles` 只能读取和修改自己的资料。
 - `organizations` 只有成员可读，`owner/admin` 可修改。
 - `organization_members` 只有企业成员可读，`owner/admin` 可管理。
+- 关联池塘、机器人、设备、投喂计划和机器人指令的数据使用组合外键校验，不能用本企业 `organization_id` 关联其他企业的对象 ID。
+- `refresh_pond_daily_snapshot` 不再向前端 `authenticated` 角色开放，避免 `viewer` 通过 `SECURITY DEFINER` RPC 产生写入。
+
+## 8. 隔离验证
+
+先注册两个测试账号，再使用以下文件检查注册结果、RLS Policy 和组合外键：
+
+`src/docs/supabase-verify-tenant-isolation.sql`
+
+文件中的第 1、2 节是只读检查；第 3 节是事务测试模板，需要替换用户、企业和池塘 UUID 后逐段执行。所有写入测试均以 `rollback` 结束，不应执行 Demo Seed 来代替隔离测试。
 
 ## 9. 字段补充说明
 
@@ -169,9 +237,6 @@ SQL 已开启 RLS，并提供以下辅助函数：
 
 当前阶段不要做：
 
-- 不要在前端保存任何 Supabase key。
+- 不要在前端保存任何私密 key。
 - 不要写 service_role key。
-- 不要接 Supabase 客户端。
-- 不要改 Pinia store。
-- 不要删除 mock/localStorage。
 - 不要接硬件、MQTT 或真实 AI 模型。

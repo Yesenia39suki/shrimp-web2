@@ -32,24 +32,24 @@ function getRedirectPath() {
   return redirect
 }
 
-function handleLogin() {
+async function handleLogin() {
   errorMessage.value = ''
   infoMessage.value = ''
   loading.value = true
 
-  const result = authStore.login(email.value, password.value)
-
-  loading.value = false
+  const result = await authStore.login(email.value, password.value)
 
   if (!result.success) {
+    loading.value = false
     errorMessage.value = result.message
     return
   }
 
+  loading.value = false
   router.replace(getRedirectPath())
 }
 
-function handleRegister() {
+async function handleRegister() {
   errorMessage.value = ''
   infoMessage.value = ''
 
@@ -67,7 +67,7 @@ function handleRegister() {
 
   loading.value = true
 
-  const result = authStore.register({
+  const result = await authStore.register({
     displayName: registerDisplayName.value,
     email: registerEmail.value,
     password: registerPassword.value,
@@ -75,15 +75,20 @@ function handleRegister() {
     region: registerRegion.value,
   })
 
-  loading.value = false
-
   if (!result.success) {
+    loading.value = false
     errorMessage.value = result.message
     return
   }
 
+  loading.value = false
   infoMessage.value = result.message
-  router.replace('/system')
+
+  if (authStore.isLoggedIn) {
+    router.replace('/system')
+  } else {
+    mode.value = 'login'
+  }
 }
 
 function fillDemoAccount(account: (typeof MOCK_DEMO_ACCOUNTS)[number]) {
@@ -124,7 +129,7 @@ function switchMode(nextMode: 'login' | 'register') {
         <div class="panel-head">
           <span>账号登录</span>
           <h1>进入系统工作台</h1>
-          <p>当前为前端模拟登录，不同账号只显示自己的企业数据。</p>
+          <p>登录后只加载当前账号所属企业的数据。</p>
         </div>
 
         <label>
@@ -171,7 +176,7 @@ function switchMode(nextMode: 'login' | 'register') {
         <div class="panel-head">
           <span>账号注册</span>
           <h1>创建企业工作台</h1>
-          <p>注册后会创建独立企业、独立账号和独立本地模拟数据。</p>
+          <p>注册后创建独立空企业空间，池塘由您进入系统后添加。</p>
         </div>
 
         <label>
