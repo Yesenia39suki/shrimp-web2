@@ -605,9 +605,9 @@ grant select, insert, update, delete on all tables in schema public to authentic
 grant usage, select on all sequences in schema public to authenticated;
 
 create or replace function public.create_default_org_space_for_user(
-  target_user_id uuid,
-  target_email text,
-  target_raw_user_meta_data jsonb default '{}'::jsonb
+  p_user_id uuid,
+  p_email text,
+  p_metadata jsonb default '{}'::jsonb
 )
 returns void
 language plpgsql
@@ -615,7 +615,7 @@ security definer
 set search_path = ''
 as $$
 declare
-  safe_meta jsonb := coalesce(target_raw_user_meta_data, '{}'::jsonb);
+  safe_meta jsonb := coalesce(p_metadata, '{}'::jsonb);
   resolved_display_name text;
   resolved_organization_name text;
   resolved_short_name text;
@@ -625,7 +625,7 @@ begin
   resolved_display_name := coalesce(resolved_display_name, nullif(trim(safe_meta ->> 'name'), ''));
   resolved_display_name := coalesce(
     resolved_display_name,
-    nullif(split_part(coalesce(target_email, ''), '@', 1), ''),
+    nullif(split_part(coalesce(p_email, ''), '@', 1), ''),
     '新用户'
   );
 
@@ -642,7 +642,7 @@ begin
   end;
 
   insert into public.profiles (id, display_name, email)
-  values (target_user_id, resolved_display_name, coalesce(target_email, ''))
+  values (p_user_id, resolved_display_name, coalesce(p_email, ''))
   on conflict (id) do update
     set display_name = excluded.display_name,
         email = excluded.email,
@@ -651,12 +651,12 @@ begin
   if exists (
     select 1
     from public.organization_members
-    where user_id = target_user_id
+    where user_id = p_user_id
   ) then
     select om.organization_id
     into created_organization_id
     from public.organization_members om
-    where om.user_id = target_user_id
+    where om.user_id = p_user_id
     order by om.created_at
     limit 1;
 
@@ -675,7 +675,7 @@ begin
     resolved_short_name,
     '未设置',
     '试用中',
-    target_user_id
+    p_user_id
   )
   returning id into created_organization_id;
 
@@ -686,7 +686,7 @@ begin
   )
   values (
     created_organization_id,
-    target_user_id,
+    p_user_id,
     'owner'::public.app_user_role
   )
   on conflict (organization_id, user_id) do update
