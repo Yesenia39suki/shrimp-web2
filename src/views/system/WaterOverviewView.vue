@@ -1,25 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 
 import MetricCard from '@/components/system/MetricCard.vue'
-import {
-  getLatestWaterData,
-  getWaterHistory,
-  uploadWaterData,
-} from '@/services/waterDataService'
-import { useAuthStore } from '@/stores/authStore'
 import { useShrimpSystemStore } from '@/stores/shrimpSystem'
 import type { SystemMetric } from '@/stores/shrimpSystem'
 
 const router = useRouter()
-const route = useRoute()
-const authStore = useAuthStore()
 const store = useShrimpSystemStore()
 const trendChartRef = ref<HTMLDivElement | null>(null)
-const devWriteLoading = ref(false)
-const devWriteResult = ref('')
 let trendChart: echarts.ECharts | null = null
 
 const trendKeys = ['temperature', 'oxygen', 'ph']
@@ -27,7 +17,6 @@ const rangeKeys = ['temperature', 'oxygen', 'ph', 'ammonia', 'nitrite']
 
 const latestUpdate = computed(() => store.waterMetrics[0]?.updatedAt ?? '当前')
 const normalCount = computed(() => store.waterMetrics.length - store.waterAlerts.length)
-const showDevWaterWrite = computed(() => route.query.devWaterWrite === '1')
 
 const overallState = computed(() => {
   if (store.waterAlerts.length === 0) {
@@ -98,60 +87,6 @@ function getAlert(metricKey: string) {
 
 function openMetric(metricKey: string) {
   router.push(`/system/water/${metricKey}`)
-}
-
-async function runDevWaterWrite() {
-  const organizationId = authStore.currentOrganization?.id
-  const pondId = 'P-01'
-
-  if (!organizationId || !store.pondConfig.pondIds.includes(pondId)) {
-    devWriteResult.value = '验证失败：当前登录企业不存在 P-01。'
-    return
-  }
-
-  devWriteLoading.value = true
-  devWriteResult.value = ''
-
-  try {
-    const recordedAt = new Date().toISOString()
-    const uploaded = await uploadWaterData({
-      organizationId,
-      pondId,
-      deviceId: '',
-      reading: {
-        temperature: 27.6,
-        dissolvedOxygen: 6.9,
-        ph: 7.8,
-        orp: 320,
-        turbidity: 18,
-        ammonia: 0.08,
-        nitrite: 0.03,
-        hardness: 190,
-        recordedAt,
-      },
-    })
-    const [latest, history] = await Promise.all([
-      getLatestWaterData(organizationId, pondId),
-      getWaterHistory(organizationId, pondId, {
-        startAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-        endAt: new Date(Date.now() + 60 * 1000).toISOString(),
-      }),
-    ])
-    const historyWritten = history.some((reading) => reading.id === uploaded.id)
-    const latestUpdated = latest.reading.id === uploaded.id
-
-    if (!historyWritten || !latestUpdated) {
-      throw new Error('RPC 已返回，但 history/latest 一致性校验失败。')
-    }
-
-    devWriteResult.value = `验证成功：P-01 历史记录和最新记录已同步，记录时间 ${new Date(
-      latest.reading.recordedAt,
-    ).toLocaleString('zh-CN')}。`
-  } catch (error) {
-    devWriteResult.value = error instanceof Error ? `验证失败：${error.message}` : '验证失败。'
-  } finally {
-    devWriteLoading.value = false
-  }
 }
 
 function buildTrendOption(): echarts.EChartsOption {
@@ -253,12 +188,6 @@ watch(
       </div>
 
       <div class="stage-tools">
-        <div v-if="showDevWaterWrite" class="dev-write-tool">
-          <button type="button" :disabled="devWriteLoading" @click="runDevWaterWrite">
-            {{ devWriteLoading ? '验证写入中' : '开发验证写入' }}
-          </button>
-          <span>{{ devWriteResult || '仅开发验证：写入模拟测量值' }}</span>
-        </div>
         <label>
           <span>当前虾池</span>
           <select :value="store.pondConfig.selectedPondId" @change="handlePondChange">
@@ -476,33 +405,6 @@ watch(
   display: flex;
   justify-content: flex-end;
   align-items: flex-start;
-}
-
-.dev-write-tool {
-  display: grid;
-  justify-items: end;
-  gap: 4px;
-  margin-right: 10px;
-}
-
-.dev-write-tool button {
-  height: 30px;
-  padding: 0 12px;
-  color: var(--text-main);
-  background: rgba(16, 54, 138, 0.72);
-  border: 1px solid rgba(121, 210, 255, 0.28);
-  cursor: pointer;
-}
-
-.dev-write-tool button:disabled {
-  cursor: wait;
-  opacity: 0.62;
-}
-
-.dev-write-tool span {
-  max-width: 420px;
-  color: var(--warning);
-  text-align: right;
 }
 
 .stage-tools label {
@@ -822,4 +724,3 @@ watch(
   }
 }
 </style>
-
