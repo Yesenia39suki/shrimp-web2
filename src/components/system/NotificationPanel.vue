@@ -120,47 +120,26 @@ function openAlertCenter(alert: SystemAlert) {
   position: absolute;
   top: 46px;
   right: -10px;
-  width: 540px;
+  width: min(540px, calc(100vw - 24px));
   max-height: 560px;
   overflow: hidden;
   color: var(--text-normal);
-  background:
-    linear-gradient(180deg, rgba(15, 54, 127, 0.96), rgba(6, 24, 58, 0.96)), rgba(3, 14, 36, 0.98);
-  border: 1px solid rgba(121, 210, 255, 0.42);
-  border-radius: 8px;
-  box-shadow:
-    0 26px 58px rgba(0, 8, 24, 0.52),
-    0 0 30px rgba(74, 169, 255, 0.18);
-  backdrop-filter: blur(14px);
+  border: 1px solid var(--border-cyan-strong);
   z-index: 60;
+  background: linear-gradient(180deg, rgba(15, 54, 127, 0.96), rgba(6, 24, 58, 0.96)), var(--overlay-bg);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--surface-shadow);
 }
 
-.notification-panel::after {
-  content: '';
-  position: absolute;
-  top: -7px;
-  right: 22px;
-  width: 12px;
-  height: 12px;
-  background: rgba(15, 54, 127, 0.96);
-  border-top: 1px solid rgba(121, 210, 255, 0.42);
-  border-left: 1px solid rgba(121, 210, 255, 0.42);
-  transform: rotate(45deg);
-}
-
-.notification-panel::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(120deg, transparent 0 48%, rgba(121, 210, 255, 0.04) 49%, transparent 52%),
-    linear-gradient(90deg, rgba(121, 210, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(rgba(121, 210, 255, 0.025) 1px, transparent 1px);
-  background-size:
-    100% 100%,
-    26px 26px,
-    26px 26px;
+@media (max-width: 650px) {
+  .notification-panel {
+    position: fixed;
+    top: 100px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: calc(100dvh - 112px);
+  }
 }
 
 .panel-head {
@@ -171,8 +150,8 @@ function openAlertCenter(alert: SystemAlert) {
   align-items: center;
   justify-content: space-between;
   padding: 0 14px;
-  background: rgba(3, 14, 36, 0.34);
-  border-bottom: 1px solid rgba(121, 210, 255, 0.2);
+  background: var(--recessed-bg);
+  border-bottom: 1px solid var(--border-cyan);
 }
 
 .panel-head div > span {
@@ -189,10 +168,10 @@ function openAlertCenter(alert: SystemAlert) {
 
 .count-badge {
   padding: 4px 8px;
-  color: #d7f1ff;
+  color: var(--text-main);
   font-size: 13px;
-  background: rgba(74, 169, 255, 0.22);
-  border: 1px solid rgba(121, 210, 255, 0.34);
+  background: var(--panel-bg-strong);
+  border: 1px solid var(--border-cyan-strong);
 }
 
 .filter-tabs {
@@ -202,16 +181,16 @@ function openAlertCenter(alert: SystemAlert) {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
   padding: 10px;
-  background: rgba(3, 14, 36, 0.24);
-  border-bottom: 1px solid rgba(121, 210, 255, 0.16);
+  background: var(--panel-title-bg);
+  border-bottom: 1px solid var(--border-cyan);
 }
 
 .filter-tabs button {
   height: 28px;
   color: var(--text-muted);
   font-size: 12px;
-  background: rgba(8, 30, 78, 0.74);
-  border: 1px solid rgba(121, 210, 255, 0.22);
+  background: var(--recessed-bg);
+  border: 1px solid var(--border-cyan);
   border-radius: 999px;
 }
 
@@ -219,7 +198,7 @@ function openAlertCenter(alert: SystemAlert) {
 .filter-tabs button:hover {
   color: var(--text-main);
   background: rgba(37, 101, 185, 0.82);
-  border-color: rgba(121, 210, 255, 0.48);
+  border-color: var(--border-cyan-strong);
 }
 
 .empty-message {
@@ -243,8 +222,8 @@ function openAlertCenter(alert: SystemAlert) {
   position: relative;
   margin-bottom: 8px;
   padding: 10px;
-  background: rgba(8, 30, 78, 0.82);
-  border: 1px solid rgba(121, 210, 255, 0.18);
+  background: var(--recessed-bg);
+  border: 1px solid var(--border-cyan);
   border-radius: 6px;
   cursor: pointer;
   transition:
@@ -256,8 +235,7 @@ function openAlertCenter(alert: SystemAlert) {
 .message-item:hover,
 .message-item:focus-visible {
   background: rgba(14, 48, 120, 0.88);
-  border-color: rgba(121, 210, 255, 0.42);
-  box-shadow: 0 0 16px rgba(91, 214, 255, 0.12);
+  border-color: var(--border-cyan-strong);
   outline: none;
 }
 
@@ -268,7 +246,7 @@ function openAlertCenter(alert: SystemAlert) {
   top: 10px;
   bottom: 10px;
   width: 3px;
-  background: rgba(255, 191, 107, 0.82);
+  background: var(--warning);
 }
 
 .message-item.danger {
@@ -277,7 +255,7 @@ function openAlertCenter(alert: SystemAlert) {
 }
 
 .message-item.danger::before {
-  background: rgba(255, 111, 125, 0.88);
+  background: var(--danger);
 }
 
 .message-title {

@@ -614,10 +614,9 @@ function goNextSection() {
 
 .page-head,
 .config-panel {
-  background: rgba(3, 14, 36, 0.16);
-  border: 1px solid rgba(121, 210, 255, 0.2);
-  box-shadow: 0 14px 30px rgba(3, 10, 28, 0.16);
-  backdrop-filter: blur(6px);
+  border: 1px solid var(--border-cyan);
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
 }
 
 .page-head {
@@ -666,8 +665,8 @@ function goNextSection() {
   display: grid;
   gap: 4px;
   padding: 7px 10px;
-  background: rgba(3, 14, 36, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.16);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .tenant-chip strong {
@@ -686,20 +685,20 @@ function goNextSection() {
 
 .page-actions button {
   height: 34px;
-  color: #dff8ff;
-  background: rgba(3, 14, 36, 0.22);
-  border: 1px solid rgba(121, 210, 255, 0.22);
+  color: var(--text-normal);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
   cursor: pointer;
 }
 
 .page-actions button.ghost {
-  background: rgba(3, 14, 36, 0.12);
+  background: var(--panel-title-bg);
 }
 
 .page-actions button:disabled {
-  color: rgba(223, 248, 255, 0.42);
-  background: rgba(3, 14, 36, 0.12);
-  border-color: rgba(121, 210, 255, 0.08);
+  color: var(--text-subtle);
+  background: var(--panel-title-bg);
+  border-color: var(--border-cyan);
   cursor: not-allowed;
 }
 
@@ -714,7 +713,7 @@ function goNextSection() {
 }
 
 .page-actions > span.success {
-  color: #69e2a4;
+  color: var(--success);
 }
 
 .config-stepbar {
@@ -733,16 +732,16 @@ function goNextSection() {
   padding: 8px 10px;
   color: var(--text-normal);
   text-align: left;
-  background: rgba(3, 14, 36, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.16);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
   cursor: pointer;
   backdrop-filter: blur(5px);
 }
 
 .config-stepbar button.active {
-  background: rgba(3, 14, 36, 0.26);
-  border-color: rgba(121, 210, 255, 0.42);
-  box-shadow: 0 0 18px rgba(91, 214, 255, 0.12);
+  border-color: var(--border-cyan-strong);
+  background: var(--panel-bg-strong);
+  border-radius: var(--panel-radius);
 }
 
 .config-stepbar em {
@@ -750,10 +749,10 @@ function goNextSection() {
   height: 28px;
   display: grid;
   place-items: center;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 12px;
   font-style: normal;
-  border: 1px solid rgba(121, 210, 255, 0.3);
+  border: 1px solid var(--border-cyan-strong);
   border-radius: 50%;
 }
 
@@ -800,8 +799,8 @@ function goNextSection() {
   justify-content: space-between;
   gap: 10px;
   padding: 0 16px;
-  background: rgba(3, 14, 36, 0.14);
-  border-bottom: 1px solid rgba(121, 210, 255, 0.1);
+  background: var(--panel-title-bg);
+  border-bottom: 1px solid var(--border-cyan);
 }
 
 .panel-title.compact {
@@ -844,20 +843,20 @@ function goNextSection() {
 .panel-tools button {
   height: 30px;
   padding: 0 12px;
-  color: #dff8ff;
-  background: rgba(3, 14, 36, 0.18);
-  border: 1px solid rgba(121, 210, 255, 0.18);
+  color: var(--text-normal);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
   cursor: pointer;
 }
 
 .panel-tools button.danger {
-  color: #ffd5da;
+  color: var(--danger);
   border-color: rgba(255, 111, 125, 0.24);
 }
 
 .panel-tools button:disabled {
-  color: rgba(223, 248, 255, 0.42);
-  border-color: rgba(121, 210, 255, 0.08);
+  color: var(--text-subtle);
+  border-color: var(--border-cyan);
   cursor: not-allowed;
 }
 
@@ -874,8 +873,8 @@ label {
   align-items: center;
   gap: 10px;
   padding: 8px;
-  background: rgba(3, 14, 36, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.12);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 label.wide,
@@ -894,29 +893,29 @@ select {
   min-width: 0;
   height: 32px;
   padding: 0 9px;
-  color: #f4fcff;
-  background: rgba(3, 14, 36, 0.34);
-  border: 1px solid rgba(121, 210, 255, 0.16);
+  color: var(--text-main);
+  background: var(--recessed-bg);
+  border: 1px solid var(--border-cyan);
   outline: none;
 }
 
 input:focus,
 select:focus {
-  border-color: rgba(121, 210, 255, 0.34);
+  border-color: var(--border-cyan-strong);
 }
 
 input:disabled,
 select:disabled {
-  color: rgba(244, 252, 255, 0.58);
-  background: rgba(3, 14, 36, 0.14);
+  color: var(--text-subtle);
+  background: var(--panel-title-bg);
   cursor: not-allowed;
 }
 
 .preview-box,
 .notice-box {
   padding: 12px;
-  background: rgba(3, 14, 36, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.12);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .preview-box strong {
@@ -943,8 +942,8 @@ select:disabled {
   align-items: center;
   gap: 8px;
   padding: 8px;
-  background: rgba(3, 14, 36, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.12);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .threshold-row span,
@@ -972,8 +971,8 @@ select:disabled {
 dl div {
   min-width: 0;
   padding: 10px;
-  background: rgba(3, 14, 36, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.12);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .security-panel article span {
@@ -1017,7 +1016,7 @@ dd {
 }
 
 .notice-box {
-  color: #69e2a4;
+  color: var(--success);
   font-size: 13px;
 }
 
@@ -1040,15 +1039,15 @@ dd {
 .step-actions button {
   height: 34px;
   padding: 0 16px;
-  color: #dff8ff;
-  background: rgba(3, 14, 36, 0.2);
-  border: 1px solid rgba(121, 210, 255, 0.2);
+  color: var(--text-normal);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
   cursor: pointer;
 }
 
 .step-actions button:disabled {
-  color: rgba(223, 248, 255, 0.38);
-  border-color: rgba(121, 210, 255, 0.08);
+  color: var(--text-subtle);
+  border-color: var(--border-cyan);
   cursor: not-allowed;
 }
 </style>

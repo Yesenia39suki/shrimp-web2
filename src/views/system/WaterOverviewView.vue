@@ -315,15 +315,9 @@ watch(
 .trend-band {
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 78% 18%, rgba(91, 214, 255, 0.08), transparent 30%),
-    linear-gradient(135deg, rgba(34, 100, 228, 0.12), rgba(14, 48, 126, 0.08)),
-    rgba(10, 36, 94, 0.16);
-  border: 1px solid rgba(121, 210, 255, 0.16);
-  border-radius: 8px;
-  box-shadow:
-    0 16px 34px rgba(8, 24, 65, 0.18),
-    0 0 22px rgba(74, 169, 255, 0.06);
+  border: 1px solid var(--border-cyan);
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
 }
 
 .water-stage {
@@ -336,21 +330,6 @@ watch(
     'meta meta';
   gap: 10px 20px;
   padding: 14px 20px 12px;
-}
-
-.water-stage::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(120deg, transparent 0 36%, rgba(91, 214, 255, 0.08) 37%, transparent 40%),
-    linear-gradient(90deg, rgba(147, 232, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(rgba(147, 232, 255, 0.05) 1px, transparent 1px);
-  background-size:
-    100% 100%,
-    30px 30px,
-    30px 30px;
-  opacity: 0.58;
 }
 
 .water-copy,
@@ -412,8 +391,8 @@ watch(
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  background: rgba(16, 54, 138, 0.26);
-  border: 1px solid rgba(121, 210, 255, 0.14);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .stage-tools span {
@@ -425,12 +404,13 @@ watch(
   min-width: 88px;
   height: 28px;
   color: var(--text-main);
-  background: rgba(8, 30, 78, 0.78);
-  border: 1px solid rgba(121, 210, 255, 0.14);
+  background: var(--recessed-bg);
+  border: 1px solid var(--border-cyan);
   outline: none;
 }
 
 .water-rings {
+  display: none;
   position: absolute;
   left: 36%;
   top: 12px;
@@ -445,7 +425,6 @@ watch(
   border: 1px solid rgba(91, 214, 255, 0.18);
   border-radius: 50%;
   transform: rotate(-8deg);
-  box-shadow: 0 0 24px rgba(91, 214, 255, 0.08);
 }
 
 .water-rings i:nth-child(2) {
@@ -471,8 +450,8 @@ watch(
 .water-meta article {
   min-width: 0;
   padding: 10px 11px;
-  background: rgba(16, 54, 138, 0.22);
-  border: 1px solid rgba(121, 210, 255, 0.1);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
   border-radius: 7px;
 }
 
@@ -486,7 +465,7 @@ watch(
 .reading-strip strong {
   display: block;
   margin-top: 4px;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 24px;
   line-height: 1.05;
 }
@@ -541,8 +520,8 @@ watch(
   justify-content: space-between;
   gap: 12px;
   padding: 0 16px;
-  background: rgba(12, 40, 104, 0.38);
-  border-bottom: 1px solid rgba(121, 210, 255, 0.1);
+  background: var(--recessed-bg);
+  border-bottom: 1px solid var(--border-cyan);
 }
 
 .zone-head strong {
@@ -578,7 +557,7 @@ watch(
   gap: 10px;
   margin: 12px;
   padding: 12px;
-  background: rgba(16, 54, 138, 0.12);
+  background: var(--panel-title-bg);
   border: 1px solid rgba(113, 229, 170, 0.2);
   border-radius: 7px;
 }
@@ -590,7 +569,6 @@ watch(
   margin-top: 4px;
   background: var(--success);
   border-radius: 50%;
-  box-shadow: 0 0 14px rgba(113, 229, 170, 0.76);
 }
 
 .dock-state.warning {
@@ -599,7 +577,6 @@ watch(
 
 .dock-state.warning i {
   background: var(--warning);
-  box-shadow: 0 0 14px rgba(255, 191, 107, 0.72);
 }
 
 .dock-state.danger {
@@ -608,7 +585,6 @@ watch(
 
 .dock-state.danger i {
   background: var(--danger);
-  box-shadow: 0 0 14px rgba(255, 111, 125, 0.72);
 }
 
 .dock-state strong {
@@ -641,8 +617,8 @@ watch(
 .empty-alert,
 .alert-stream article,
 .range-list p {
-  background: rgba(16, 54, 138, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.1);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
   border-radius: 6px;
 }
 
@@ -682,7 +658,7 @@ watch(
 
 .range-list {
   padding-top: 10px;
-  border-top: 1px solid rgba(121, 210, 255, 0.1);
+  border-top: 1px solid var(--border-cyan);
 }
 
 .range-list p {
@@ -707,10 +683,8 @@ watch(
 .trend-band {
   display: grid;
   grid-template-rows: 46px minmax(0, 1fr);
-  background:
-    radial-gradient(circle at 38% 18%, rgba(91, 214, 255, 0.12), transparent 32%),
-    linear-gradient(135deg, rgba(34, 100, 228, 0.18), rgba(14, 48, 126, 0.14)),
-    rgba(10, 36, 94, 0.32);
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
 }
 
 .trend-chart {

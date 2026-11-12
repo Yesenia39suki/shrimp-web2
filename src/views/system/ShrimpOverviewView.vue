@@ -104,11 +104,9 @@ function handlePondChange(event: Event) {
   justify-content: space-between;
   gap: 16px;
   padding: 0 18px;
-  background:
-    linear-gradient(180deg, rgba(34, 100, 228, 0.12), rgba(14, 48, 126, 0.08)),
-    rgba(10, 36, 94, 0.18);
-  border: 1px solid rgba(121, 210, 255, 0.16);
-  box-shadow: 0 14px 30px rgba(8, 24, 65, 0.18);
+  border: 1px solid var(--border-cyan);
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
 }
 
 .head-copy {
@@ -161,8 +159,8 @@ function handlePondChange(event: Event) {
   align-items: center;
   gap: 8px;
   padding: 0 12px;
-  background: rgba(16, 54, 138, 0.18);
-  border: 1px solid rgba(121, 210, 255, 0.14);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .pond-switch span {
@@ -174,8 +172,8 @@ function handlePondChange(event: Event) {
   min-width: 88px;
   height: 24px;
   color: var(--text-main);
-  background: rgba(8, 30, 78, 0.78);
-  border: 1px solid rgba(121, 210, 255, 0.14);
+  background: var(--recessed-bg);
+  border: 1px solid var(--border-cyan);
   outline: none;
 }
 
@@ -208,16 +206,13 @@ function handlePondChange(event: Event) {
 
 .pond-strip article {
   padding: 12px;
-  background:
-    linear-gradient(180deg, rgba(34, 100, 228, 0.1), rgba(14, 48, 126, 0.06)),
-    rgba(10, 36, 94, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.12);
-  box-shadow: 0 10px 24px rgba(8, 24, 65, 0.12);
+  border: 1px solid var(--border-cyan);
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
 }
 
 .pond-strip article.active {
-  border-color: rgba(121, 210, 255, 0.28);
-  box-shadow: 0 0 14px rgba(74, 169, 255, 0.12);
+  border-color: var(--border-cyan-strong);
 }
 
 .pond-strip span {

@@ -24,6 +24,8 @@ type RobotPositionUploadPayload = Omit<RobotPositionLatest, 'recordedAt'> & {
 const positionCache = new Map<string, RobotPositionLatest>()
 const subscriptionTimers = new Map<string, number>()
 const realtimeChannels = new Map<string, RealtimeChannel>()
+const pendingSubscriptions = new Set<string>()
+let subscriptionSequence = 0
 
 function cacheKey(organizationId: string, robotId: string) {
   return `${organizationId}:${robotId}`
@@ -246,33 +248,40 @@ export function subscribeRobotPosition(
     return subscriptionId
   }
 
-  const subscriptionId = `robot-position:${organizationId}:${robotId}:${Date.now()}`
-  void resolveRobotUuid(organizationId, robotId).then((robotUuid) => {
-    const channel = supabase
-      .channel(subscriptionId)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'robot_position_latest',
-          filter: `organization_id=eq.${organizationId}`,
-        },
-        (payload) => {
-          const row = payload.new as RobotPositionLatestRow | null
-          if (row?.robot_id === robotUuid) {
-            callback(mapRobotPositionRow(row))
-          }
-        },
-      )
-      .subscribe()
-    realtimeChannels.set(subscriptionId, channel)
-  })
+  const subscriptionId = `robot-position:${organizationId}:${robotId}:${++subscriptionSequence}`
+  pendingSubscriptions.add(subscriptionId)
+  void resolveRobotUuid(organizationId, robotId)
+    .then((robotUuid) => {
+      if (!pendingSubscriptions.delete(subscriptionId)) return
+      const channel = supabase
+        .channel(subscriptionId)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'robot_position_latest',
+            filter: `organization_id=eq.${organizationId}`,
+          },
+          (payload) => {
+            const row = payload.new as RobotPositionLatestRow | null
+            if (row?.robot_id === robotUuid) {
+              callback(mapRobotPositionRow(row))
+            }
+          },
+        )
+        .subscribe()
+      realtimeChannels.set(subscriptionId, channel)
+    })
+    .catch(() => {
+      pendingSubscriptions.delete(subscriptionId)
+    })
 
   return subscriptionId
 }
 
 export function unsubscribeRobotPosition(subscriptionId: string): boolean {
+  pendingSubscriptions.delete(subscriptionId)
   const timerId = subscriptionTimers.get(subscriptionId)
   if (timerId !== undefined) {
     window.clearInterval(timerId)

@@ -390,12 +390,9 @@ watch(
 .info-panel,
 .chart-panel,
 .empty {
-  background:
-    linear-gradient(180deg, rgba(34, 100, 228, 0.12), rgba(14, 48, 126, 0.08)),
-    rgba(10, 36, 94, 0.18);
-  border: 1px solid rgba(121, 210, 255, 0.16);
-  box-shadow: 0 14px 30px rgba(8, 24, 65, 0.18);
-  backdrop-filter: blur(5px);
+  border: 1px solid var(--border-cyan);
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
 }
 
 .page-head {
@@ -439,8 +436,8 @@ watch(
   padding: 0 12px;
   color: var(--text-normal);
   text-decoration: none;
-  background: rgba(16, 54, 138, 0.18);
-  border: 1px solid rgba(121, 210, 255, 0.16);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .pond-switch span {
@@ -452,8 +449,8 @@ watch(
   min-width: 88px;
   height: 24px;
   color: var(--text-main);
-  background: rgba(8, 30, 78, 0.78);
-  border: 1px solid rgba(121, 210, 255, 0.14);
+  background: var(--recessed-bg);
+  border: 1px solid var(--border-cyan);
   outline: none;
 }
 
@@ -482,8 +479,8 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 0 14px;
-  background: rgba(12, 40, 104, 0.22);
-  border-bottom: 1px solid rgba(121, 210, 255, 0.1);
+  background: var(--panel-title-bg);
+  border-bottom: 1px solid var(--border-cyan);
 }
 
 .panel-title strong,
@@ -504,7 +501,7 @@ watch(
 
 .metric-number {
   padding: 22px 16px 16px;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 44px;
   font-weight: 800;
 }
@@ -526,8 +523,8 @@ watch(
 .summary-strip article,
 .pond-list article,
 .pond-table article {
-  background: rgba(16, 54, 138, 0.14);
-  border: 1px solid rgba(121, 210, 255, 0.1);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .summary-strip article {
@@ -585,8 +582,7 @@ watch(
 }
 
 .pond-list article.active {
-  border-color: rgba(121, 210, 255, 0.32);
-  box-shadow: 0 0 14px rgba(74, 169, 255, 0.16);
+  border-color: var(--border-cyan-strong);
 }
 
 .pond-list article.warning {

@@ -123,28 +123,15 @@ const isTextValue = computed(() => typeof props.metric.value === 'string')
   color: var(--text-normal);
   text-align: left;
   overflow: hidden;
-  background:
-    linear-gradient(135deg, rgba(34, 100, 228, 0.18), rgba(14, 48, 126, 0.14)),
-    rgba(10, 36, 94, 0.32);
-  border: 1px solid rgba(121, 210, 255, 0.16);
-  border-radius: 8px;
-  clip-path: polygon(
-    0 0,
-    calc(100% - 16px) 0,
-    100% 16px,
-    100% 100%,
-    16px 100%,
-    0 calc(100% - 16px)
-  );
-  box-shadow:
-    0 14px 28px rgba(8, 24, 65, 0.18),
-    0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  border: 1px solid var(--border-cyan);
   cursor: pointer;
   transition:
     transform 0.18s ease,
     border-color 0.18s ease,
     box-shadow 0.18s ease,
     background 0.18s ease;
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
 }
 
 .metric-card::before {
@@ -153,40 +140,11 @@ const isTextValue = computed(() => typeof props.metric.value === 'string')
   inset: 10px auto 10px 0;
   width: 3px;
   background: var(--success);
-  box-shadow: 0 0 16px rgba(113, 229, 170, 0.72);
-}
-
-.metric-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(90deg, rgba(147, 232, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(rgba(147, 232, 255, 0.06) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(120deg, transparent 0%, black 20%, transparent 78%);
-  opacity: 0.28;
-}
-
-.metric-card .corner::after {
-  content: '';
-  position: absolute;
-  right: 16px;
-  top: 12px;
-  width: 56px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(91, 214, 255, 0.62));
-  transform: rotate(34deg);
-  transform-origin: right center;
 }
 
 .metric-card:hover {
-  border-color: rgba(121, 210, 255, 0.34);
-  box-shadow:
-    0 18px 38px rgba(8, 24, 65, 0.24),
-    0 0 24px rgba(74, 169, 255, 0.16);
-  transform: translateY(-2px);
+  border-color: var(--border-cyan-strong);
+  background: var(--panel-bg-strong);
 }
 
 .metric-card.warning {
@@ -195,7 +153,6 @@ const isTextValue = computed(() => typeof props.metric.value === 'string')
 
 .metric-card.warning::before {
   background: var(--warning);
-  box-shadow: 0 0 16px rgba(255, 191, 107, 0.72);
 }
 
 .metric-card.danger {
@@ -204,7 +161,6 @@ const isTextValue = computed(() => typeof props.metric.value === 'string')
 
 .metric-card.danger::before {
   background: var(--danger);
-  box-shadow: 0 0 16px rgba(255, 111, 125, 0.72);
 }
 
 .corner {
@@ -273,7 +229,6 @@ const isTextValue = computed(() => typeof props.metric.value === 'string')
   height: 7px;
   background: currentColor;
   border-radius: 50%;
-  box-shadow: 0 0 11px currentColor;
 }
 
 .warning .metric-status {
@@ -297,7 +252,7 @@ const isTextValue = computed(() => typeof props.metric.value === 'string')
 
 .metric-value {
   min-width: 0;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 30px;
   font-weight: 800;
   line-height: 1.08;
@@ -327,7 +282,7 @@ const isTextValue = computed(() => typeof props.metric.value === 'string')
   gap: 3px;
   padding: 5px 6px;
   background: rgba(14, 48, 126, 0.2);
-  border: 1px solid rgba(121, 210, 255, 0.1);
+  border: 1px solid var(--border-cyan);
   border-radius: 6px;
 }
 
@@ -336,7 +291,6 @@ const isTextValue = computed(() => typeof props.metric.value === 'string')
   min-height: 6px;
   display: block;
   background: linear-gradient(180deg, var(--cyan-soft), rgba(91, 214, 255, 0.22));
-  box-shadow: 0 0 8px rgba(91, 214, 255, 0.28);
 }
 
 .text-badge {
@@ -346,7 +300,7 @@ const isTextValue = computed(() => typeof props.metric.value === 'string')
   color: var(--cyan);
   font-size: 12px;
   background: rgba(74, 169, 255, 0.1);
-  border: 1px solid rgba(121, 210, 255, 0.12);
+  border: 1px solid var(--border-cyan);
   border-radius: 999px;
 }
 
@@ -357,7 +311,7 @@ const isTextValue = computed(() => typeof props.metric.value === 'string')
   gap: 8px;
   padding: 6px 8px;
   background: rgba(14, 48, 126, 0.16);
-  border: 1px solid rgba(121, 210, 255, 0.08);
+  border: 1px solid var(--border-cyan);
   border-radius: 6px;
 }
 
@@ -383,7 +337,7 @@ const isTextValue = computed(() => typeof props.metric.value === 'string')
 .metric-note {
   min-width: 0;
   margin: 0;
-  color: #cceefa;
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.45;
   word-break: break-all;

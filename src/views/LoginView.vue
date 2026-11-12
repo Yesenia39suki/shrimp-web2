@@ -100,11 +100,6 @@ function switchMode(nextMode: 'login' | 'register') {
 <template>
   <main class="login-page">
     <QingdaoMapBackground />
-    <div class="map-labels" aria-hidden="true">
-      <span>养殖区域示意图</span>
-      <span>池塘监测区域</span>
-      <span>虾池数据隔离节点</span>
-    </div>
 
     <section class="login-shell">
       <div class="login-identity">
@@ -112,7 +107,6 @@ function switchMode(nextMode: 'login' | 'register') {
         <div>
           <strong>智慧虾投喂管理系统</strong>
           <em>多企业养殖数据隔离控制台</em>
-          <p>账号只加载所属企业、所属虾池、所属机器人和本地配置数据。</p>
         </div>
       </div>
 
@@ -212,231 +206,202 @@ function switchMode(nextMode: 'login' | 'register') {
 <style scoped>
 .login-page {
   position: relative;
-  width: 100%;
-  height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  overflow: hidden;
+  padding: clamp(16px, 4vw, 48px);
   color: var(--text-normal);
   background:
-    linear-gradient(rgba(91, 214, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(91, 214, 255, 0.04) 1px, transparent 1px),
     radial-gradient(circle at 50% 42%, rgba(74, 169, 255, 0.18), transparent 42%),
     linear-gradient(180deg, #0a2e74 0%, #071c48 100%);
-  background-size:
-    44px 44px,
-    44px 44px,
-    auto,
-    auto;
-}
-
-.login-page::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 62% 48%, transparent 0 34%, rgba(4, 14, 36, 0.24) 58%),
-    linear-gradient(90deg, rgba(3, 12, 34, 0.24), rgba(3, 12, 34, 0.12) 46%, rgba(3, 12, 34, 0.54));
-}
-
-.map-labels {
-  position: absolute;
-  left: 72px;
-  bottom: 54px;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.map-labels span {
-  padding: 7px 10px;
-  color: rgba(223, 248, 255, 0.9);
-  font-size: 12px;
-  background: rgba(8, 30, 78, 0.5);
-  border: 1px solid rgba(121, 210, 255, 0.22);
 }
 
 .login-shell {
   position: relative;
-  z-index: 3;
-  width: min(920px, calc(100vw - 48px));
-  min-height: 560px;
+  z-index: 1;
+  width: min(860px, 100%);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) minmax(350px, 0.9fr);
   overflow: hidden;
   background:
     radial-gradient(circle at 18% 18%, rgba(121, 210, 255, 0.14), transparent 34%),
     linear-gradient(135deg, rgba(20, 78, 197, 0.32), rgba(6, 24, 64, 0.88));
-  border: 1px solid rgba(121, 210, 255, 0.22);
-  box-shadow: 0 22px 58px rgba(4, 12, 38, 0.42);
+  border: 1px solid var(--border-cyan);
+  border-radius: 24px;
+  box-shadow: 0 12px 28px rgba(10, 29, 52, 0.22);
 }
 
 .login-identity {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 42px;
-  background:
-    linear-gradient(112deg, transparent 0 42%, rgba(121, 210, 255, 0.07) 43%, transparent 46% 100%),
-    rgba(5, 20, 51, 0.28);
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 22px;
+  padding: clamp(28px, 5vw, 62px);
+  background: rgba(5, 20, 51, 0.28);
 }
 
 .logo-mark {
-  position: relative;
-  width: 54px;
-  height: 54px;
+  width: 48px;
+  height: 48px;
   display: grid;
-  flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgba(121, 210, 255, 0.82);
   background: radial-gradient(circle, rgba(74, 169, 255, 0.24), rgba(16, 51, 125, 0.48) 62%);
-  box-shadow:
-    0 0 18px rgba(121, 210, 255, 0.34),
-    0 0 0 6px rgba(27, 93, 247, 0.08);
+  border: 1px solid var(--border-cyan-strong);
+  border-radius: 14px;
 }
 
 .logo-mark i {
-  width: 22px;
-  height: 22px;
-  border: 4px solid #7aeec3;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #7aeec3;
   border-right-color: #5bd6ff;
   border-radius: 50%;
 }
 
 .login-identity strong {
   display: block;
-  color: #ffffff;
-  font-size: 30px;
-  font-weight: 800;
+  max-width: 330px;
+  color: var(--text-main);
+  font-size: clamp(26px, 3.5vw, 36px);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  line-height: 1.18;
+  text-wrap: balance;
 }
 
 .login-identity em {
   display: block;
-  margin-top: 10px;
+  margin-top: 12px;
   color: var(--text-muted);
   font-size: 14px;
   font-style: normal;
 }
 
-.login-identity p {
-  max-width: 340px;
-  margin: 18px 0 0;
-  color: rgba(223, 248, 255, 0.86);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
 .login-panel {
   display: grid;
   align-content: center;
-  gap: 14px;
-  padding: 32px 34px;
+  gap: 15px;
+  padding: clamp(26px, 3.8vw, 46px);
+  color: var(--text-main);
   background: rgba(3, 16, 42, 0.78);
-  border-left: 1px solid rgba(121, 210, 255, 0.16);
 }
 
 .register-panel {
   gap: 12px;
 }
 
+.panel-head {
+  margin-bottom: 7px;
+}
+
 .panel-head span {
-  color: var(--cyan);
-  font-size: 13px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .panel-head h1 {
-  margin: 8px 0 0;
-  color: var(--text-main);
-  font-size: 24px;
+  margin: 5px 0 0;
+  font-size: clamp(23px, 3vw, 31px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
 }
 
 .panel-head p {
-  margin: 8px 0 0;
+  margin: 9px 0 0;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
 }
 
 label {
   display: grid;
-  gap: 8px;
-}
-
-label span {
+  gap: 5px;
   color: var(--text-muted);
   font-size: 13px;
+  font-weight: 600;
 }
 
 input {
-  height: 40px;
-  padding: 0 12px;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 12px;
   color: var(--text-main);
+  color-scheme: dark;
   background: rgba(8, 30, 78, 0.86);
-  border: 1px solid rgba(121, 210, 255, 0.18);
-  outline: none;
+  border: 1px solid var(--border-cyan);
+  border-radius: 12px;
+  font-weight: 400;
 }
 
-input:focus {
-  border-color: rgba(121, 210, 255, 0.48);
-  box-shadow: 0 0 0 2px rgba(91, 214, 255, 0.08);
+input::placeholder {
+  color: var(--text-subtle);
+}
+
+input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
 }
 
 button {
-  height: 42px;
-  color: #ffffff;
-  font-weight: 700;
+  min-height: 42px;
+  padding: 7px 16px;
+  color: var(--on-primary);
+  font-size: 14px;
+  font-weight: 600;
   background: linear-gradient(180deg, rgba(23, 101, 180, 0.95), rgba(8, 58, 118, 0.95));
-  border: 1px solid rgba(121, 210, 255, 0.36);
+  border: 1px solid var(--border-cyan-strong);
+  border-radius: 999px;
   cursor: pointer;
 }
 
+button:hover:not(:disabled) {
+  border-color: var(--cyan-soft);
+}
+
 button:disabled {
-  color: rgba(223, 248, 255, 0.6);
   cursor: not-allowed;
-  opacity: 0.72;
+  opacity: 0.55;
 }
 
 .error-message,
 .info-message {
   margin: 0;
-  padding: 9px 10px;
+  padding: 9px 11px;
+  border-radius: var(--control-radius);
   font-size: 13px;
 }
 
 .error-message {
   color: #ffd3d8;
-  background: rgba(255, 111, 125, 0.1);
-  border: 1px solid rgba(255, 111, 125, 0.22);
+  background: rgba(255, 111, 125, 0.14);
 }
 
 .info-message {
   color: #d8ffe8;
-  background: rgba(105, 226, 164, 0.1);
-  border: 1px solid rgba(105, 226, 164, 0.2);
+  background: rgba(105, 226, 164, 0.12);
 }
 
 .text-button {
-  height: auto;
-  min-height: 30px;
-  padding: 6px 8px;
-  color: var(--text-normal);
-  font-size: 12px;
-  font-weight: 400;
-  text-align: left;
-  background: rgba(8, 30, 78, 0.62);
-  border: 1px solid rgba(121, 210, 255, 0.14);
-}
-
-.text-button:hover {
-  border-color: rgba(121, 210, 255, 0.32);
-}
-
-.text-button {
+  min-height: 32px;
+  padding: 4px 8px;
   color: var(--cyan-soft);
-  text-align: center;
+  font-size: 13px;
   background: transparent;
+  border-color: transparent;
+}
+
+.text-button:hover:not(:disabled) {
+  background: var(--panel-title-bg);
+}
+
+@media (max-width: 690px) {
+  .login-shell { max-width: 450px; grid-template-columns: minmax(0, 1fr); }
+  .login-identity { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 20px 24px; }
+  .login-identity strong { font-size: 21px; }
+  .login-identity em { margin-top: 3px; font-size: 12px; }
+  .logo-mark { width: 36px; height: 36px; }
+  .logo-mark i { width: 15px; height: 15px; }
 }
 </style>

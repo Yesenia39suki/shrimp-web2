@@ -1,0 +1,287 @@
+"""按实际报警和阈值逐条生成现场核查与处理建议。"""
+
+import re
+from dataclasses import dataclass
+from decimal import Decimal
+
+from app.schemas.chat import ChatWarningItem, ChatWebSource, PondChatResponse
+from app.schemas.farm import ActiveAlertSnapshot, PondOverview, WaterMetricAssessment
+from app.services.risk_engine import METRIC_RULES
+
+REPORT_QUESTION = re.compile(
+    r"(?:逐条|分别|每条|每项|各项|哪些|有什么).{0,16}(?:预警|告警|报警|异常)|"
+    r"(?:预警|告警|报警|异常).{0,12}(?:经过|原因|解释|处理|解决)|"
+    r"(?:为什么|为啥).{0,8}(?:预警|告警|报警)|"
+    r"(?:池子|池塘|本池|当前池).{0,24}(?:建议|改进|改善|处理|分析|怎么办)"
+)
+POND_ADVICE_QUESTION = re.compile(r"建议|意见|处理|解决|改进|改善|分析|怎么办")
+HISTORICAL_QUESTION = re.compile(r"上一次|上次|上一条|上次的|此前|之前|昨天|历史建议")
+POND_CODE = re.compile(r"(?<![A-Z0-9])[A-Z][A-Z0-9]{0,9}[-_]\d+(?![A-Z0-9])", re.IGNORECASE)
+NUMBER = r"[-+]?\d+(?:\.\d+)?"
+ALERT_RANGE = re.compile(rf"\s*({NUMBER})\s*(?:[-~～—–至到])\s*({NUMBER})")
+ALERT_VALUE = re.compile(rf"\s*({NUMBER})")
+ALERT_LEVELS = {"critical": "严重", "warning": "预警", "info": "提示"}
+
+
+@dataclass(frozen=True, slots=True)
+class Handling:
+    impact: str
+    actions: tuple[str, ...]
+    verify: str
+
+
+LOW_NITROGEN = Handling(
+    "低于配置下限只说明触发了规则。氨氮或亚硝酸盐偏低通常无需人为升高。",
+    ("用试剂或另一台仪器复测，核对单位、检测下限和配置的下限。",
+     "若复测仍低且养殖状态正常，请管理人员核对这项下限是否符合监测目的。"),
+    "记录复测结果，并核对修正配置后报警是否停止重复触发。",
+)
+
+HANDLING = {
+    "dissolved_oxygen": {
+        "偏低": Handling(
+            "持续低氧会使对虾应激、摄食下降，凌晨和池底容易出现更低的读数。",
+            ("用校准仪器在不同点位复测表层和近底层，观察虾群活动和水流。",
+             "确认低氧后检查现有增氧设备、供电和水流覆盖，由现场人员按低氧处置流程恢复有效增氧。"),
+            "处置后在原点位和池底复测，并关注下一次清晨低氧时段。",
+        ),
+        "偏高": Handling(
+            "午后光合作用或仪器补偿偏差都可能造成高读数。持续偏高时要看饱和度和昼夜变化。",
+            ("用校准探头复测，核对水温、盐度补偿及溶氧饱和度。",
+             "对比清晨和午后读数，同时观察藻量和水色，由现场人员据此调整巡测安排。"),
+            "比较同点位清晨、午后的溶氧与饱和度，确认偏高是否持续。",
+        ),
+    },
+    "ph": {
+        "偏低": Handling(
+            "偏低或快速波动可能使对虾应激。降雨、进水或缓冲能力不足都值得核查。",
+            ("校准 pH 探头，复测清晨和午后 pH，并补测总碱度。",
+             "核对近期降雨、进水和底层水质，确认原因后由现场人员制定分步调水方案。"),
+            "在同一时间和点位复测 pH、总碱度，比较日内波动是否收敛。",
+        ),
+        "偏高": Handling(
+            "偏高会增加总氨氮中非离子氨的比例。单看 pH 无法判断实际风险。",
+            ("校准探头并比较清晨和午后 pH，同时测水温、总碱度和氨氮。",
+             "查看藻量、水色和进水记录，确认偏高原因后再安排调整，避免直接投加酸碱剂。"),
+            "复核清晨和午后的 pH、氨氮及虾群活动，确认没有继续恶化。",
+        ),
+    },
+    "temperature": {
+        "偏低": Handling(
+            "降温可能降低对虾活动和摄食，水温变化越急，越容易出现应激。",
+            ("核对天气和进水记录，分点测表层与底层水温，确认是否存在温差。",
+             "确认持续低温后，检查已有保温或防风设施，由现场人员安排逐步恢复水温。"),
+            "在原点位连续复测水温，并观察活动和摄食是否恢复。",
+        ),
+        "偏高": Handling(
+            "高温会改变对虾耗氧和水体持氧能力，可能与低氧同时出现。",
+            ("复测表层和底层水温，核对午后日晒、进水温差，并同步测溶氧。",
+             "确认持续高温后检查遮阴、水深和水流，按场区流程逐步缓解温升。"),
+            "在高温时段复测温度和溶氧，观察是否仍超限。",
+        ),
+    },
+    "orp": {
+        "偏低": Handling(
+            "氧化还原电位偏低可能与底层耗氧、有机物积累或探头状态有关。",
+            ("清洁并核验探头，在原点位及近底层复测，同时测溶氧和 pH。",
+             "确认底层异常后核对残饵、底泥和水流覆盖，按现场流程处理已确认的积累。"),
+            "在同点位复核 ORP、近底层溶氧和 pH，看趋势是否恢复。",
+        ),
+        "偏高": Handling(
+            "ORP 会受 pH、溶氧、探头状态和水体处理过程影响，单项偏高无法判断原因。",
+            ("清洁探头并交叉复测，同时核对水温、pH 和溶氧。",
+             "核对进水、消毒或氧化剂使用记录，由现场人员复核处理流程和残留。"),
+            "在同点位复测 ORP 和相关指标，确认偏高是否持续。",
+        ),
+    },
+    "turbidity": {
+        "偏低": Handling(
+            "较低浊度可能反映颗粒或藻量较少，也可能是点位或阈值设置所致。",
+            ("清洁传感器，复测并核对水色、透明度和近期换水记录。",
+             "若水体和虾群状态正常，由管理人员核对浊度下限的设置目的。"),
+            "对比同点位浊度和水色变化，判断是否需要继续跟踪。",
+        ),
+        "偏高": Handling(
+            "浊度升高可能来自进水带入的泥沙、底泥扰动、残饵或藻量变化。",
+            ("在进水口和池内不同点位取样，观察静置后是泥沙沉降还是水色仍深。",
+             "核对进水、底泥扰动和投喂记录，优先处理确认的浑浊来源。"),
+            "在相同点位复测浊度，并同步看水色、溶氧有无异常。",
+        ),
+    },
+    "ammonia": {
+        "偏低": LOW_NITROGEN,
+        "偏高": Handling(
+            "氨氮累积可能造成应激，水温和 pH 较高时更需要同时评估非离子氨风险。",
+            ("用试剂复测氨氮，同步记录 pH、水温和溶氧，核对试剂量程与单位。",
+             "确认仍高后排查残饵、排污和水处理设施，优先处理已确认的污染来源。"),
+            "处理后复测氨氮和 pH，继续记录趋势，直到数值稳定在场区阈值内。",
+        ),
+    },
+    "nitrite": {
+        "偏低": LOW_NITROGEN,
+        "偏高": Handling(
+            "持续偏高会增加对虾应激，也可能提示氮转化环节受影响。",
+            ("复测亚硝酸盐，并同步记录氨氮、溶氧和盐度，核对报告单位。",
+             "确认仍高后检查进水、底层有机物及已有生物处理设施，由现场人员排查失稳原因。"),
+            "处置后连续复测亚硝酸盐和氨氮，确认两个指标的趋势都改善。",
+        ),
+    },
+    "hardness": {
+        "偏低": Handling(
+            "硬度偏低可能反映钙镁供应不足，对蜕壳期的判断还要结合盐度和单项浓度。",
+            ("复测总硬度，补测钙、镁、盐度，并核对近期进水记录。",
+             "确认有缺项后由现场人员按养殖阶段制定分步补充方案。"),
+            "复核总硬度、钙镁和盐度，观察蜕壳与活力有无异常。",
+        ),
+        "偏高": Handling(
+            "硬度升高可能与源水、蒸发浓缩或近期补充矿物质有关，需结合盐度判断。",
+            ("复测总硬度、钙镁和盐度，对比源水及不同点位。",
+             "核对补水和矿物质投入记录，确认来源后按现场流程逐步处理。"),
+            "复测处理前后硬度和盐度，确认没有出现快速变化。",
+        ),
+    },
+}
+
+GENERAL_HANDLING = Handling(
+    "这条记录需要现场确认。现有信息无法判断持续程度或根因。",
+    ("核对报警来源、点位和设备状态，现场复测对应指标或检查设备。",
+     "若异常仍存在，交由值班人员按对应设备或水质处置流程处理。"),
+    "记录现场结果和处理时间，确认对应异常恢复后再更新报警状态。",
+)
+
+
+def wants_warning_report(question: str, pond_code: str) -> bool:
+    if HISTORICAL_QUESTION.search(question):
+        return False
+    codes = POND_CODE.findall(question)
+    if any(code.casefold() != pond_code.casefold() for code in codes):
+        return False
+    return bool(REPORT_QUESTION.search(question) or (codes and POND_ADVICE_QUESTION.search(question)))
+
+
+def _short(text: str, limit: int = 250) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
+def _alert_direction(alert: ActiveAlertSnapshot) -> str:
+    value = ALERT_VALUE.match(alert.current_value or "")
+    bounds = ALERT_RANGE.match(alert.normal_range or "")
+    if value and bounds:
+        reading = Decimal(value.group(1))
+        lower, upper = map(Decimal, bounds.groups())
+        if lower <= upper:
+            if reading < lower:
+                return "偏低"
+            if reading > upper:
+                return "偏高"
+    label = f"{alert.type} {alert.title}"
+    if re.search(r"偏低|过低|低于|[_-]low\b", label, re.IGNORECASE):
+        return "偏低"
+    if re.search(r"偏高|过高|高于|[_-]high\b", label, re.IGNORECASE):
+        return "偏高"
+    return ""
+
+
+def _alert_item(alert: ActiveAlertSnapshot) -> ChatWarningItem:
+    lines = [_short(alert.content)] if alert.content.strip() else []
+    if alert.current_value:
+        lines.append(f"报警记录值为 {_short(alert.current_value, 60)}。")
+    if alert.normal_range:
+        lines.append(f"当时的记录阈值为 {_short(alert.normal_range, 60)}。")
+    direction = _alert_direction(alert)
+    metric_key = "dissolved_oxygen" if alert.metric_key == "oxygen" else alert.metric_key
+    if metric_key not in HANDLING:
+        metric_key = next((rule.key for rule in METRIC_RULES if rule.label in alert.title), None)
+    handling = HANDLING.get(metric_key or "", {}).get(direction, GENERAL_HANDLING)
+    title = _short(alert.title, 90) or "系统报警"
+    if direction and "异常" in title and direction not in title:
+        title = f"{title}（{direction}）"
+    return ChatWarningItem(
+        id=f"alert-{alert.id}", title=title,
+        status=f"未处理 · {ALERT_LEVELS[alert.level]}", recorded_at=alert.created_at,
+        trigger=" ".join(lines) or "系统已记录此报警，当前仍待现场核实。",
+        impact=handling.impact,
+        actions=["先核对报警发生时的记录，并确认现在是否仍有同样异常。", *handling.actions],
+        verify=handling.verify,
+    )
+
+
+def _number(value: Decimal) -> str:
+    return format(value.normalize(), "f")
+
+
+def _metric_item(metric: WaterMetricAssessment, pond: PondOverview) -> ChatWarningItem:
+    handling = HANDLING.get(metric.key, {}).get(metric.status, GENERAL_HANDLING)
+    stale = pond.risk.water_data_stale
+    bound = metric.minimum if metric.status == "偏低" else metric.maximum
+    assert metric.value is not None and bound is not None
+    comparison = "低于下限" if metric.status == "偏低" else "高于上限"
+    trigger = (
+        f"{'历史记录' if stale else '最近一次有效记录'}为 {_number(metric.value)}{metric.unit}，"
+        f"{comparison} {_number(bound)}{metric.unit}，差值 {_number(abs(metric.value - bound))}{metric.unit}。"
+    )
+    return ChatWarningItem(
+        id=f"metric-{metric.key}", title=f"{metric.label}{metric.status}",
+        status="历史异常 · 待复测" if stale else "有效读数越界",
+        recorded_at=pond.latest_water.recorded_at if pond.latest_water else None,
+        trigger=trigger, impact=handling.impact,
+        actions=["先现场复测，确认仍越界后再按下面的步骤排查或处理。", *handling.actions]
+        if stale else list(handling.actions),
+        verify=handling.verify,
+    )
+
+
+def _freshness_item(pond: PondOverview) -> ChatWarningItem | None:
+    if pond.latest_water is None:
+        title = "暂无水质读数"
+        trigger = "系统尚未收到该池可用于评估的水质记录。"
+    elif pond.risk.water_data_stale:
+        title = "水质数据已过期"
+        trigger = f"最新读数已超过系统设定的 {pond.risk.water_stale_after_hours} 小时有效期。"
+    elif pond.risk.missing_metrics:
+        title = "部分水质数据或阈值缺失"
+        trigger = f"以下指标缺少读数或配置阈值：{'、'.join(pond.risk.missing_metrics)}。"
+    else:
+        return None
+    return ChatWarningItem(
+        id="water-freshness", title=title, status="优先核实",
+        recorded_at=pond.latest_water.recorded_at if pond.latest_water else None,
+        trigger=trigger, impact="现有记录不足以确认当前水质。旧报警和旧读数可用来确定复测重点。",
+        actions=["优先现场测溶解氧、pH、水温、氨氮和亚硝酸盐，并记录点位、时间和单位。",
+                 "核对采集设备、上传链路和缺失的阈值设置，把复测值录入系统。"],
+        verify="用最新有效记录重新判断各项指标，并逐条核对仍未处理的报警。",
+    )
+
+
+def build_warning_report(pond: PondOverview) -> PondChatResponse:
+    issues = []
+    freshness = _freshness_item(pond)
+    if freshness is not None:
+        issues.append(freshness)
+    alerts = [_alert_item(alert) for alert in pond.active_alerts if alert.read_status != "resolved"]
+    metrics = [
+        _metric_item(metric, pond) for metric in pond.metrics
+        if metric.value is not None and (
+            (metric.status == "偏低" and metric.minimum is not None)
+            or (metric.status == "偏高" and metric.maximum is not None)
+        )
+    ]
+    issues.extend(alerts)
+    issues.extend(metrics)
+    pond_code = pond.pond.pond_code
+    if not issues:
+        return PondChatResponse(answer=f"{pond_code} 的有效水质读数均在配置阈值内，暂无未处理报警。继续按日常计划巡测即可。")
+    reading_status = "历史记录" if pond.risk.water_data_stale else "有效读数"
+    summary = f"{pond_code} 当前有 {len(alerts)} 条未处理报警，{reading_status}有 {len(metrics)} 项越界。"
+    if pond.risk.water_data_stale:
+        summary += "先复测，再判断历史异常是否仍然存在。"
+    elif freshness:
+        summary += "先补测或核对缺失数据，再判断是否需要采取措施。"
+    if pond.risk.water_data_stale and alerts:
+        summary += f"系统显示的「{pond.risk.risk_level}」来自未处理报警；过期读数未用于当前水质评分。"
+    sources = [ChatWebSource(
+        source_id="water-guide", title="农业农村部 · 夏季水产养殖技术指引",
+        url="https://yyj.moa.gov.cn/scyz/202306/t20230620_6430587.htm",
+    )] if metrics or freshness else []
+    return PondChatResponse(answer=summary, issues=issues, sources=sources)

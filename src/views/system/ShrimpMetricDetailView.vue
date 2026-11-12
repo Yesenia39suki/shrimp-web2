@@ -426,12 +426,9 @@ watch(
 .pool-list-card,
 .chart-panel,
 .empty {
-  background:
-    linear-gradient(180deg, rgba(34, 100, 228, 0.1), rgba(14, 48, 126, 0.06)),
-    rgba(10, 36, 94, 0.14);
-  border: 1px solid rgba(121, 210, 255, 0.14);
-  box-shadow: 0 12px 28px rgba(8, 24, 65, 0.14);
-  backdrop-filter: blur(5px);
+  border: 1px solid var(--border-cyan);
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
 }
 
 .page-head {
@@ -477,8 +474,8 @@ watch(
   padding: 0 12px;
   color: var(--text-normal);
   text-decoration: none;
-  background: rgba(16, 54, 138, 0.16);
-  border: 1px solid rgba(121, 210, 255, 0.12);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .pond-switch span {
@@ -490,8 +487,8 @@ watch(
   min-width: 88px;
   height: 24px;
   color: var(--text-main);
-  background: rgba(8, 30, 78, 0.66);
-  border: 1px solid rgba(121, 210, 255, 0.12);
+  background: var(--recessed-bg);
+  border: 1px solid var(--border-cyan);
   outline: none;
 }
 
@@ -526,8 +523,8 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 0 14px;
-  background: rgba(12, 40, 104, 0.22);
-  border-bottom: 1px solid rgba(121, 210, 255, 0.08);
+  background: var(--panel-title-bg);
+  border-bottom: 1px solid var(--border-cyan);
 }
 
 .panel-head strong {
@@ -546,7 +543,7 @@ watch(
 
 .hero-number {
   padding: 24px 16px 18px;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 42px;
   font-weight: 800;
 }
@@ -567,8 +564,8 @@ watch(
 
 .summary-grid article,
 .pool-list article {
-  background: rgba(16, 54, 138, 0.16);
-  border: 1px solid rgba(121, 210, 255, 0.08);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .summary-grid article {
@@ -598,8 +595,8 @@ watch(
   color: var(--text-normal);
   font-size: 12px;
   line-height: 1.55;
-  background: rgba(16, 54, 138, 0.1);
-  border: 1px solid rgba(121, 210, 255, 0.08);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .pool-list {
@@ -619,8 +616,7 @@ watch(
 }
 
 .pool-list article.active {
-  border-color: rgba(121, 210, 255, 0.28);
-  box-shadow: 0 0 12px rgba(74, 169, 255, 0.12);
+  border-color: var(--border-cyan-strong);
 }
 
 .pool-list article.warning {

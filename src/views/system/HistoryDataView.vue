@@ -788,10 +788,9 @@ onBeforeUnmount(() => {
 .summary-grid article,
 .category-list,
 .history-panel {
-  background: rgba(3, 14, 36, 0.16);
-  border: 1px solid rgba(121, 210, 255, 0.18);
-  box-shadow: 0 14px 30px rgba(3, 10, 28, 0.16);
-  backdrop-filter: blur(6px);
+  border: 1px solid var(--border-cyan);
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
 }
 
 .history-head {
@@ -864,16 +863,16 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 0 10px;
-  background: rgba(3, 14, 36, 0.14);
-  border: 1px solid rgba(121, 210, 255, 0.14);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 select {
   min-width: 88px;
   height: 26px;
   color: var(--text-main);
-  background: rgba(8, 30, 78, 0.78);
-  border: 1px solid rgba(121, 210, 255, 0.14);
+  background: var(--recessed-bg);
+  border: 1px solid var(--border-cyan);
   outline: none;
 }
 
@@ -921,15 +920,15 @@ select {
   padding: 8px 10px;
   color: var(--text-normal);
   text-align: left;
-  background: rgba(3, 14, 36, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.12);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
   cursor: pointer;
 }
 
 .category-list button.active {
-  background: rgba(3, 14, 36, 0.28);
-  border-color: rgba(121, 210, 255, 0.4);
-  box-shadow: 0 0 18px rgba(91, 214, 255, 0.12);
+  border-color: var(--border-cyan-strong);
+  background: var(--panel-bg-strong);
+  border-radius: var(--panel-radius);
 }
 
 .category-list strong {
@@ -951,8 +950,8 @@ select {
   justify-content: space-between;
   gap: 12px;
   padding: 0 16px;
-  background: rgba(3, 14, 36, 0.14);
-  border-bottom: 1px solid rgba(121, 210, 255, 0.1);
+  background: var(--panel-title-bg);
+  border-bottom: 1px solid var(--border-cyan);
 }
 
 .panel-title strong {
@@ -995,16 +994,16 @@ select {
   padding: 0 10px;
   color: var(--text-muted);
   font-size: 12px;
-  background: rgba(3, 14, 36, 0.16);
-  border: 1px solid rgba(121, 210, 255, 0.14);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
   cursor: pointer;
 }
 
 .range-tabs button.active,
 .range-tabs button:hover {
   color: var(--text-main);
-  border-color: rgba(121, 210, 255, 0.4);
-  background: rgba(37, 101, 185, 0.34);
+  border-color: var(--border-cyan-strong);
+  background: var(--panel-bg-strong);
 }
 
 .compare-controls {
@@ -1035,7 +1034,7 @@ select {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   padding: 12px;
-  border-bottom: 1px solid rgba(121, 210, 255, 0.1);
+  border-bottom: 1px solid var(--border-cyan);
 }
 
 .chart-card {
@@ -1044,8 +1043,8 @@ select {
   display: grid;
   grid-template-rows: 24px minmax(0, 1fr);
   padding: 10px;
-  background: rgba(3, 14, 36, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.12);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .chart-card strong {
@@ -1087,8 +1086,8 @@ select {
   padding: 0 10px;
   color: var(--text-muted);
   font-size: 12px;
-  background: rgba(6, 26, 70, 0.94);
-  border: 1px solid rgba(121, 210, 255, 0.14);
+  background: var(--recessed-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .table-body {
@@ -1103,8 +1102,8 @@ select {
 .table-row {
   min-height: 44px;
   padding: 8px 10px;
-  background: rgba(3, 14, 36, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.1);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .table-row span,
@@ -1129,7 +1128,7 @@ select {
 }
 
 .table-row em {
-  color: #69e2a4;
+  color: var(--success);
 }
 
 .table-row em.warning {

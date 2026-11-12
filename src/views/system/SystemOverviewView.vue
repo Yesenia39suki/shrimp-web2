@@ -609,8 +609,8 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: 68px minmax(0, 1fr) 156px;
-  gap: 10px;
+  grid-template-rows: 84px minmax(0, 1fr) 160px;
+  gap: 14px;
   overflow: hidden;
 }
 
@@ -619,37 +619,22 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .right-rail,
 .band-panel {
   position: relative;
-  overflow: hidden;
+  min-width: 0;
+  border-radius: var(--panel-radius);
+}
+
+.map-stage,
+.band-panel {
   background:
     linear-gradient(180deg, rgba(74, 169, 255, 0.1), rgba(24, 84, 214, 0.05)),
     rgba(18, 70, 178, 0.03);
   border: 1px solid rgba(121, 210, 255, 0.11);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.015) inset,
-    0 10px 20px rgba(10, 28, 76, 0.12);
-  backdrop-filter: blur(4px);
-}
-
-.kpi-strip::before,
-.map-stage::before,
-.right-rail::before,
-.band-panel::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(90deg, rgba(91, 214, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(rgba(91, 214, 255, 0.025) 1px, transparent 1px);
-  background-size: 18px 18px;
-  opacity: 0.28;
 }
 
 .kpi-strip {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
-  padding: 7px 10px;
+  gap: 10px;
 }
 
 .kpi-chip {
@@ -658,32 +643,33 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   position: relative;
   min-width: 0;
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 9px 11px;
   background: rgba(20, 74, 188, 0.07);
-  border: 1px solid rgba(121, 210, 255, 0.07);
+  border: 1px solid rgba(121, 210, 255, 0.12);
+  border-radius: 14px;
 }
 
 .kpi-ring {
   position: relative;
-  width: 30px;
-  height: 30px;
+  grid-area: 1 / 2;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: conic-gradient(var(--accent) var(--progress), rgba(91, 214, 255, 0.08) 0);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .kpi-ring-core {
   position: absolute;
-  inset: 4px;
+  inset: 3px;
   background: rgba(18, 56, 143, 0.8);
-  border: 1px solid rgba(121, 210, 255, 0.1);
   border-radius: 50%;
 }
 
 .kpi-copy {
+  grid-area: 1 / 1;
   min-width: 0;
   display: grid;
   gap: 2px;
@@ -692,16 +678,18 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .kpi-copy span,
 .kpi-copy small {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.35;
   word-break: break-all;
 }
 
 .kpi-copy strong {
-  color: #ffffff;
-  font-size: 16px;
-  line-height: 1.25;
-  word-break: break-all;
+  color: var(--text-main);
+  font-size: clamp(16px, 1.5vw, 23px);
+  font-weight: 650;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .kpi-copy em {
@@ -715,9 +703,8 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .main-stage {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 292px;
-  gap: 10px;
-  overflow: hidden;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 19%);
+  gap: 14px;
 }
 
 .map-stage {
@@ -725,7 +712,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 8px;
-  padding: 10px;
+  padding: 12px;
 }
 
 .stage-overlay {
@@ -733,7 +720,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   z-index: 2;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(210px, 0.78fr) minmax(360px, 1.48fr) minmax(236px, 0.86fr);
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.38fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
   overflow: hidden;
@@ -747,7 +734,17 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 7px 16px;
+}
+
+.map-stage-head > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.map-stage-head > div:first-child strong {
+  font-size: 19px;
+  letter-spacing: -0.025em;
 }
 
 .map-stage-head strong,
@@ -776,9 +773,8 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 
 .head-tags span,
 .pond-select {
-  padding: 3px 8px;
-  background: rgba(20, 74, 188, 0.08);
-  border: 1px solid rgba(121, 210, 255, 0.08);
+  padding: 3px 5px;
+  white-space: nowrap;
 }
 
 .pond-select {
@@ -789,43 +785,42 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 
 .pond-select select {
   min-width: 84px;
-  height: 22px;
+  max-width: min(36vw, 160px);
+  min-height: 28px;
+  padding: 2px 7px;
   color: var(--text-main);
-  background: rgba(10, 36, 94, 0.58);
-  border: 1px solid rgba(121, 210, 255, 0.12);
-  outline: none;
+  color-scheme: dark;
+  background: var(--recessed-bg);
+  border: 1px solid var(--border-cyan-strong);
+  border-radius: 8px;
 }
 
 .stage-badge {
   position: relative;
   z-index: 2;
-  justify-self: center;
+  justify-self: start;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 4px 9px;
-  background: rgba(20, 74, 188, 0.07);
-  border: 1px solid rgba(121, 210, 255, 0.1);
+  gap: 6px 16px;
+  padding: 0 2px;
 }
 
 .stage-badge span {
-  color: #dff8ff;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
 .floating-panel {
   position: relative;
   z-index: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: auto;
   background: rgba(18, 70, 178, 0.04);
-  border: 1px solid rgba(121, 210, 255, 0.08);
-  backdrop-filter: blur(5px);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.015) inset,
-    0 8px 16px rgba(10, 28, 76, 0.08);
+  border: 1px solid rgba(121, 210, 255, 0.11);
+  border-radius: 12px;
 }
 
 .panel-left-top {
@@ -843,7 +838,9 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .panel-center-core {
   grid-column: 2;
   grid-row: 2;
-  padding: 9px 10px;
+  padding: 10px 12px;
+  background: var(--panel-bg-strong);
+  border-color: var(--border-cyan-strong);
 }
 
 .panel-right-top {
@@ -868,7 +865,9 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  flex-wrap: wrap;
+  gap: 3px 7px;
+  margin-bottom: 8px;
 }
 
 .trend-row {
@@ -891,7 +890,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .trend-meta strong {
   display: block;
   margin-top: 4px;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 14px;
 }
 
@@ -910,9 +909,10 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .water-mini-grid article {
   min-width: 0;
   padding: 5px 6px;
-  background: rgba(18, 70, 178, 0.045);
-  border: 1px solid rgba(121, 210, 255, 0.08);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
   border-left: 2px solid rgba(113, 229, 170, 0.48);
+  border-radius: 7px;
 }
 
 .water-mini-grid article.warning {
@@ -931,7 +931,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .water-mini-grid strong {
   display: block;
   margin: 2px 0;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 11px;
   line-height: 1.35;
   word-break: break-all;
@@ -948,15 +948,18 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .compact-grid article {
   min-width: 0;
   padding: 7px;
-  background: rgba(18, 70, 178, 0.035);
-  border: 1px solid rgba(121, 210, 255, 0.07);
+  background: var(--panel-title-bg);
+  border-radius: 7px;
 }
 
 .core-number {
-  padding: 4px 0 8px;
-  color: #ffffff;
-  font-size: 32px;
-  font-weight: 800;
+  padding: 1px 0 7px;
+  color: var(--text-main);
+  font-size: clamp(32px, 3.1vw, 44px);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.06em;
+  line-height: 1.05;
   text-align: center;
 }
 
@@ -967,6 +970,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   font-size: 12px;
   font-style: normal;
   font-weight: 400;
+  letter-spacing: normal;
 }
 
 .core-grid {
@@ -977,12 +981,13 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 
 .core-grid article,
 .pool-matrix article {
-  background: rgba(18, 70, 178, 0.035);
-  border: 1px solid rgba(121, 210, 255, 0.06);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
+  border-radius: 8px;
 }
 
 .core-grid article {
-  padding: 6px 7px;
+  padding: 5px 7px;
 }
 
 .core-grid span,
@@ -1016,8 +1021,8 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 }
 
 .pool-matrix article.active {
-  border-color: rgba(121, 210, 255, 0.22);
-  box-shadow: 0 0 12px rgba(74, 169, 255, 0.1);
+  border-color: var(--border-cyan-strong);
+  background: var(--panel-bg-strong);
 }
 
 .pool-matrix p {
@@ -1036,7 +1041,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .compact-grid strong {
   display: block;
   margin-top: 4px;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 12px;
   line-height: 1.45;
   word-break: break-all;
@@ -1044,12 +1049,11 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 
 .device-visual {
   position: relative;
-  height: 42px;
+  height: 38px;
+  flex: 0 0 38px;
   margin-bottom: 6px;
-  background:
-    linear-gradient(rgba(121, 210, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(121, 210, 255, 0.045) 1px, transparent 1px), rgba(18, 70, 178, 0.05);
-  background-size: 14px 14px;
+  background: var(--recessed-bg);
+  border-radius: 8px;
 }
 
 .device-visual .tower,
@@ -1082,7 +1086,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   right: 18px;
   bottom: 10px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(91, 214, 255, 0.56), transparent);
+  background: var(--border-cyan-strong);
 }
 
 .device-meta span,
@@ -1095,7 +1099,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .device-meta strong {
   display: block;
   margin: 5px 0;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 12px;
 }
 
@@ -1114,8 +1118,8 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .device-status-grid article {
   min-width: 0;
   padding: 5px 6px;
-  background: rgba(18, 70, 178, 0.045);
-  border: 1px solid rgba(121, 210, 255, 0.08);
+  background: var(--panel-title-bg);
+  border-radius: 7px;
 }
 
 .device-status-grid span {
@@ -1128,7 +1132,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .device-status-grid strong {
   display: block;
   margin-top: 2px;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 11px;
   line-height: 1.35;
   white-space: nowrap;
@@ -1138,8 +1142,8 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 
 .mini-event {
   padding: 6px 7px;
-  background: rgba(18, 70, 178, 0.05);
-  border: 1px solid rgba(121, 210, 255, 0.07);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .mini-event + .mini-event {
@@ -1159,14 +1163,14 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .mini-event strong {
   display: block;
   margin-top: 3px;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 12px;
 }
 
 .mini-event p,
 .stage-empty {
   margin: 4px 0 0;
-  color: #cceefa;
+  color: var(--text-muted);
   font-size: 11px;
   line-height: 1.45;
 }
@@ -1176,8 +1180,6 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   display: grid;
   grid-template-rows: minmax(0, 1.08fr) minmax(0, 0.92fr);
   gap: 10px;
-  padding: 9px;
-  overflow: auto;
 }
 
 .rail-module {
@@ -1186,7 +1188,8 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   grid-template-rows: 32px minmax(0, 1fr);
   overflow: hidden;
   background: rgba(18, 70, 178, 0.04);
-  border: 1px solid rgba(121, 210, 255, 0.07);
+  border: 1px solid var(--border-cyan);
+  border-radius: 14px;
 }
 
 .rail-head,
@@ -1196,8 +1199,8 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   align-items: center;
   justify-content: space-between;
   padding: 0 10px;
-  background: rgba(18, 70, 178, 0.06);
-  border-bottom: 1px solid rgba(121, 210, 255, 0.07);
+  background: var(--panel-title-bg);
+  border-bottom: 1px solid var(--border-cyan);
 }
 
 .stat-stack,
@@ -1219,8 +1222,9 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   justify-content: space-between;
   gap: 8px;
   padding: 6px 7px;
-  background: rgba(18, 70, 178, 0.05);
-  border-left: 2px solid rgba(121, 210, 255, 0.32);
+  background: var(--panel-title-bg);
+  border-left: 2px solid var(--border-cyan-strong);
+  border-radius: 6px;
 }
 
 .stat-row.green {
@@ -1237,7 +1241,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 }
 
 .stat-row strong {
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
@@ -1259,8 +1263,9 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 
 .rail-events article {
   padding: 6px 7px;
-  background: rgba(18, 70, 178, 0.035);
-  border: 1px solid rgba(121, 210, 255, 0.07);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
+  border-radius: 8px;
 }
 
 .rail-events article.notice {
@@ -1276,13 +1281,13 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .rail-events strong {
   display: block;
   margin-top: 3px;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 11px;
 }
 
 .rail-events p {
   margin: 4px 0 0;
-  color: #cceefa;
+  color: var(--text-muted);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -1318,8 +1323,8 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 
 .trend-pack article {
   padding: 7px;
-  background: rgba(18, 70, 178, 0.035);
-  border: 1px solid rgba(121, 210, 255, 0.07);
+  background: var(--panel-title-bg);
+  border-radius: 8px;
 }
 
 .trend-pack span {
@@ -1331,7 +1336,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .trend-pack strong {
   display: block;
   margin-top: 4px;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 12px;
 }
 
@@ -1367,7 +1372,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 }
 
 .bar-pack strong {
-  color: #ffffff;
+  color: var(--text-main);
 }
 
 .bar-pack div {
@@ -1375,15 +1380,15 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
   display: flex;
   align-items: end;
   justify-content: center;
-  background: rgba(18, 70, 178, 0.05);
-  border: 1px solid rgba(121, 210, 255, 0.07);
+  background: var(--panel-title-bg);
+  border-radius: 6px;
 }
 
 .bar-pack i {
   width: 14px;
   display: block;
   background: linear-gradient(180deg, rgba(91, 214, 255, 0.82), rgba(113, 229, 170, 0.4));
-  box-shadow: 0 0 10px rgba(91, 214, 255, 0.18);
+  border-radius: 4px 4px 0 0;
 }
 
 .list-pack,
@@ -1395,8 +1400,9 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .list-pack article,
 .param-pack article {
   padding: 6px 7px;
-  background: rgba(18, 70, 178, 0.035);
-  border: 1px solid rgba(121, 210, 255, 0.07);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
+  border-radius: 8px;
 }
 
 .list-pack span,
@@ -1411,7 +1417,7 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 .param-pack strong {
   display: block;
   margin-top: 3px;
-  color: #ffffff;
+  color: var(--text-main);
   font-size: 11px;
 }
 
@@ -1423,5 +1429,32 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
 
 .param-pack article.warning {
   border-color: rgba(255, 191, 107, 0.16);
+}
+
+@media (max-width: 1120px) {
+  .screen-overview { height: auto; grid-template-rows: auto auto auto; overflow: visible; }
+  .kpi-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .main-stage { grid-template-columns: minmax(0, 1fr); }
+  .stage-overlay { grid-template-rows: repeat(2, minmax(172px, auto)); }
+  .right-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; }
+  .rail-module { max-height: 230px; }
+  .bottom-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .band-panel { min-height: 156px; max-height: 200px; }
+}
+
+@media (max-width: 720px) {
+  .stage-overlay { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; }
+  .floating-panel { grid-area: auto; }
+  .panel-center-core { grid-column: 1 / -1; order: -1; }
+  .floating-panel:not(.panel-center-core) { min-height: 150px; max-height: 260px; }
+  .kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kpi-chip { padding: 8px; }
+  .kpi-ring { width: 19px; height: 19px; }
+}
+
+@media (max-width: 480px) {
+  .screen-overview, .main-stage, .bottom-band { gap: 10px; }
+  .kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stage-overlay, .right-rail, .bottom-band { grid-template-columns: minmax(0, 1fr); }
 }
 </style>

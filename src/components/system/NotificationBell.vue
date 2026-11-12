@@ -108,20 +108,14 @@ onBeforeUnmount(() => {
   gap: 6px;
   padding: 0 8px;
   color: var(--text-normal);
-  background: rgba(3, 14, 36, 0.32);
-  border: 1px solid rgba(121, 210, 255, 0.22);
-  border-radius: 999px;
-  box-shadow:
-    0 0 14px rgba(8, 24, 65, 0.18) inset,
-    0 0 12px rgba(91, 214, 255, 0.06);
+  border: 1px solid var(--border-cyan);
   cursor: pointer;
+  background: var(--recessed-bg);
+  border-radius: 999px;
 }
 
 .bell-button:hover {
-  border-color: rgba(121, 210, 255, 0.42);
-  box-shadow:
-    0 0 16px rgba(74, 169, 255, 0.12),
-    0 0 14px rgba(8, 24, 65, 0.18) inset;
+  border-color: var(--border-cyan-strong);
 }
 
 .bell-button:disabled {
@@ -129,10 +123,7 @@ onBeforeUnmount(() => {
 }
 
 .notification-bell.active .bell-button {
-  border-color: rgba(121, 210, 255, 0.56);
-  box-shadow:
-    0 0 18px rgba(91, 214, 255, 0.18),
-    0 0 14px rgba(8, 24, 65, 0.18) inset;
+  border-color: var(--border-cyan-strong);
 }
 
 .notification-bell.normal .bell-button {
@@ -145,7 +136,6 @@ onBeforeUnmount(() => {
   height: 12px;
   border: 1px solid rgba(105, 226, 164, 0.58);
   border-radius: 50%;
-  box-shadow: 0 0 12px rgba(105, 226, 164, 0.18);
 }
 
 .signal-ring::before {
@@ -154,17 +144,14 @@ onBeforeUnmount(() => {
   inset: 3px;
   background: #69e2a4;
   border-radius: 50%;
-  box-shadow: 0 0 10px rgba(105, 226, 164, 0.75);
 }
 
 .notification-bell.warning .signal-ring {
-  border-color: rgba(255, 111, 125, 0.68);
-  box-shadow: 0 0 14px rgba(255, 111, 125, 0.3);
+  border-color: var(--danger);
 }
 
 .notification-bell.warning .signal-ring::before {
   background: var(--danger);
-  box-shadow: 0 0 12px rgba(255, 111, 125, 0.82);
 }
 
 .warning-symbol {
@@ -172,9 +159,8 @@ onBeforeUnmount(() => {
   width: 16px;
   height: 15px;
   display: block;
-  background: #ff5f6f;
+  background: var(--danger);
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  filter: drop-shadow(0 0 8px rgba(255, 95, 111, 0.62));
 }
 
 .warning-symbol::after {
@@ -219,6 +205,5 @@ onBeforeUnmount(() => {
   background: var(--danger);
   border: 1px solid rgba(255, 218, 222, 0.58);
   border-radius: 10px;
-  box-shadow: 0 0 12px rgba(255, 111, 125, 0.45);
 }
 </style>

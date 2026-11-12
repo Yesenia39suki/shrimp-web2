@@ -1,5 +1,13 @@
 {
+  "framework": "vite",
+  "functions": {
+    "api/v1/agent/chat.py": {
+      "maxDuration": 120,
+      "includeFiles": "agent_backend/app/**",
+      "excludeFiles": "{agent_backend/.venv/**,agent_backend/.env*,agent_backend/tests/**,node_modules/**,dist/**,public/**}"
+    }
+  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

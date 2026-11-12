@@ -109,11 +109,9 @@ watch(
   display: grid;
   grid-template-rows: 44px minmax(0, 1fr);
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(34, 100, 228, 0.18), rgba(14, 48, 126, 0.14)),
-    rgba(10, 36, 94, 0.32);
-  border: 1px solid rgba(121, 210, 255, 0.16);
-  box-shadow: 0 14px 28px rgba(8, 24, 65, 0.16);
+  border: 1px solid var(--border-cyan);
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
 }
 
 .trend-title {
@@ -121,8 +119,8 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 0 14px;
-  background: rgba(12, 40, 104, 0.38);
-  border-bottom: 1px solid rgba(121, 210, 255, 0.1);
+  background: var(--recessed-bg);
+  border-bottom: 1px solid var(--border-cyan);
 }
 
 .trend-title strong {

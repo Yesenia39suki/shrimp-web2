@@ -9,14 +9,8 @@ import {
   submitAiFeedback,
 } from '@/services/aiService'
 import { createOperationLog } from '@/services/auditLogService'
-import { getDevices } from '@/services/deviceService'
-import { getFeedingPlans, getFeedingRecords, getTodayFeedingTasks } from '@/services/feedingService'
-import {
-  loadAiRequestLogs,
-  loadModelConfig,
-  saveModelConfig,
-  testModelConnection,
-} from '@/services/modelProviderService'
+import { getFeedingRecords } from '@/services/feedingService'
+import { loadModelConfig } from '@/services/modelProviderService'
 import { calculateTotalRisk, type RiskCalculationResult } from '@/services/riskScoreService'
 import { getRobotStatus } from '@/services/robotService'
 import {
@@ -32,18 +26,10 @@ import { getLatestWaterData } from '@/services/waterDataService'
 import { useAuthStore } from '@/stores/authStore'
 import { useShrimpSystemStore } from '@/stores/shrimpSystem'
 import type { SystemAlert } from '@/stores/shrimpSystem'
-import type {
-  AiFeedingAdviceResult,
-  AiModelConfig,
-  AiPondEvaluationResult,
-  AiProviderType,
-  AiRequestLog,
-} from '@/types/ai'
-import type { Device } from '@/types/device'
-import type { FeedingPlan, FeedingRecord, FeedingTask } from '@/types/feeding'
+import type { AiFeedingAdviceResult, AiModelConfig, AiPondEvaluationResult } from '@/types/ai'
 import type { RobotCommandType, RobotPositionHistory, RobotPositionLatest } from '@/types/robot'
 
-type ExtensionModule = 'scene3d' | 'ai' | 'model' | 'feeding' | 'alerts' | 'devices'
+type ExtensionModule = 'scene3d' | 'ai' | 'alerts'
 
 const authStore = useAuthStore()
 const systemStore = useShrimpSystemStore()
@@ -58,11 +44,6 @@ const robotTrack = ref<RobotPositionHistory[]>([])
 const aiEvaluation = ref<AiPondEvaluationResult | null>(null)
 const aiAdvice = ref<AiFeedingAdviceResult | null>(null)
 const riskResult = ref<RiskCalculationResult | null>(null)
-const feedingPlans = ref<FeedingPlan[]>([])
-const feedingTasks = ref<FeedingTask[]>([])
-const feedingRecords = ref<FeedingRecord[]>([])
-const devices = ref<Device[]>([])
-const aiLogs = ref<AiRequestLog[]>([])
 const alertExplanation = ref('')
 let robotPositionSubscriptionId = ''
 let extensionLoadSequence = 0
@@ -77,14 +58,6 @@ const modelConfig = reactive<AiModelConfig>({
   monthlyUsage: 0,
   enabled: true,
 })
-
-const providerOptions: Array<{ value: AiProviderType; label: string }> = [
-  { value: 'rule_engine', label: '规则评分模型' },
-  { value: 'openai', label: 'OpenAI GPT' },
-  { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'local_model', label: '自研模型' },
-  { value: 'hybrid', label: '混合决策' },
-]
 
 const commandButtons: Array<{ type: RobotCommandType; label: string }> = [
   { type: 'feed', label: '投喂' },
@@ -112,9 +85,7 @@ const moduleCards = computed(() => [
   {
     id: 'scene3d' as const,
     title: '3D 养殖场监控',
-    value: robotPosition.value
-      ? `${robotPosition.value.x.toFixed(1)}, ${robotPosition.value.z.toFixed(1)}`
-      : '等待坐标',
+    value: '轨迹监控',
     desc: '位置与轨迹',
   },
   {
@@ -124,33 +95,14 @@ const moduleCards = computed(() => [
     desc: '评分与建议',
   },
   {
-    id: 'model' as const,
-    title: 'AI 模型设置',
-    value:
-      providerOptions.find((item) => item.value === modelConfig.providerType)?.label ?? '未设置',
-    desc: '来源与限制',
-  },
-  {
-    id: 'feeding' as const,
-    title: '投喂计划管理',
-    value: `${feedingTasks.value.length} 个任务`,
-    desc: '计划与记录',
-  },
-  {
     id: 'alerts' as const,
     title: '报警中心',
     value: `${alerts.value.length} 条异常`,
     desc: '报警与处理',
   },
-  {
-    id: 'devices' as const,
-    title: '设备管理',
-    value: `${devices.value.length} 台设备`,
-    desc: '设备与心跳',
-  },
 ])
 
-const moduleKeys: ExtensionModule[] = ['scene3d', 'ai', 'model', 'feeding', 'alerts', 'devices']
+const moduleKeys: ExtensionModule[] = ['scene3d', 'ai', 'alerts']
 
 const timeRange = computed(() => ({
   startAt: new Date(Date.now() - 7 * 24 * 60 * 60_000).toISOString(),
@@ -200,11 +152,6 @@ async function loadExtensionData() {
   aiEvaluation.value = null
   aiAdvice.value = null
   riskResult.value = null
-  feedingPlans.value = []
-  feedingTasks.value = []
-  feedingRecords.value = []
-  devices.value = []
-  aiLogs.value = []
   alertExplanation.value = ''
   Object.assign(modelConfig, {
     id: '',
@@ -235,11 +182,7 @@ async function loadExtensionData() {
       evaluation,
       advice,
       config,
-      plans,
-      tasks,
       records,
-      nextDevices,
-      logs,
       latestWater,
       thresholds,
       shrimpEstimate,
@@ -281,19 +224,11 @@ async function loadExtensionData() {
         '暂无 AI 投喂建议',
       ),
       loadModelConfig(organizationId.value),
-      loadOrFallback(() => getFeedingPlans(organizationId.value, pondId.value), [], '暂无投喂计划'),
-      loadOrFallback(
-        () => getTodayFeedingTasks(organizationId.value, pondId.value),
-        [],
-        '暂无今日投喂任务',
-      ),
       loadOrFallback(
         () => getFeedingRecords(organizationId.value, pondId.value, timeRange.value),
         [],
         '暂无投喂记录',
       ),
-      loadOrFallback(() => getDevices(organizationId.value), [], '暂无设备数据'),
-      loadOrFallback(() => loadAiRequestLogs(organizationId.value), [], '暂无 AI 请求日志'),
       loadOrFallback(
         () => getLatestWaterData(organizationId.value, pondId.value),
         null,
@@ -315,11 +250,6 @@ async function loadExtensionData() {
     aiEvaluation.value = evaluation
     aiAdvice.value = advice
     Object.assign(modelConfig, config)
-    feedingPlans.value = plans
-    feedingTasks.value = tasks
-    feedingRecords.value = records
-    devices.value = nextDevices
-    aiLogs.value = logs
     riskResult.value =
       latestWater && thresholds && shrimpEstimate && robotStatus
         ? calculateTotalRisk({
@@ -392,25 +322,6 @@ async function handleAiFeedback(accepted: boolean) {
     detail: aiAdvice.value?.summary,
   })
   actionMessage.value = accepted ? '已采纳' : '已记录反馈'
-}
-
-async function handleTestModel() {
-  const result = await testModelConnection(organizationId.value, modelConfig)
-  actionMessage.value = result.message
-}
-
-async function handleSaveModel() {
-  if (!assertWritable()) return
-
-  Object.assign(modelConfig, await saveModelConfig(organizationId.value, modelConfig))
-  await createOperationLog(organizationId.value, {
-    userId: authStore.currentUser?.id,
-    action: '保存 AI 模型配置',
-    targetType: 'ai_model_config',
-    targetId: modelConfig.id,
-    detail: providerOptions.find((item) => item.value === modelConfig.providerType)?.label,
-  })
-  actionMessage.value = '模型配置已保存'
 }
 
 async function handleExplainAlert(alert: SystemAlert) {
@@ -511,13 +422,6 @@ onBeforeUnmount(() => {
 
         <aside class="detail-stack">
           <article>
-            <span>坐标</span>
-            <strong>
-              X {{ robotPosition?.x.toFixed(1) ?? '-' }} / Y
-              {{ robotPosition?.y.toFixed(1) ?? '-' }} / Z {{ robotPosition?.z.toFixed(1) ?? '-' }}
-            </strong>
-          </article>
-          <article>
             <span>航向 / 速度</span>
             <strong
               >{{ robotPosition?.heading ?? '-' }}° / {{ robotPosition?.speed ?? '-' }} m/s</strong
@@ -572,79 +476,6 @@ onBeforeUnmount(() => {
         </article>
       </div>
 
-      <div v-else-if="activeModule === 'model'" class="model-layout">
-        <label>
-          <span>模型来源</span>
-          <select v-model="modelConfig.providerType">
-            <option
-              v-for="provider in providerOptions"
-              :key="provider.value"
-              :value="provider.value"
-            >
-              {{ provider.label }}
-            </option>
-          </select>
-        </label>
-        <label>
-          <span>模型名称</span>
-          <input v-model.trim="modelConfig.modelName" type="text" />
-        </label>
-        <label>
-          <span>自研 endpoint</span>
-          <input
-            v-model.trim="modelConfig.endpointUrl"
-            :disabled="
-              modelConfig.providerType !== 'local_model' && modelConfig.providerType !== 'hybrid'
-            "
-            type="text"
-            placeholder="后端调用"
-          />
-        </label>
-        <label>
-          <span>JSON 输出</span>
-          <input v-model="modelConfig.jsonOutput" type="checkbox" />
-        </label>
-        <label>
-          <span>每日调用限制</span>
-          <input v-model.number="modelConfig.dailyLimit" type="number" min="0" />
-        </label>
-        <label>
-          <span>本月调用次数</span>
-          <input v-model.number="modelConfig.monthlyUsage" disabled type="number" />
-        </label>
-        <p class="model-tip">API Key 由后端环境变量管理，前端不保存密钥。</p>
-        <div class="button-line wide">
-          <button type="button" @click="handleTestModel">连接测试</button>
-          <button type="button" :disabled="!canOperate" @click="handleSaveModel">保存配置</button>
-        </div>
-        <ul class="log-list">
-          <li v-for="log in aiLogs" :key="log.id">
-            {{ log.endpoint }} / {{ log.success ? '成功' : '失败' }}
-          </li>
-        </ul>
-      </div>
-
-      <div v-else-if="activeModule === 'feeding'" class="list-layout">
-        <article>
-          <span>投喂计划</span>
-          <p v-for="plan in feedingPlans" :key="plan.id">
-            {{ plan.name }} / {{ plan.feedAmountKg }} 千克 / {{ plan.enabled ? '启用' : '停用' }}
-          </p>
-        </article>
-        <article>
-          <span>今日任务</span>
-          <p v-for="task in feedingTasks" :key="task.id">
-            {{ task.scheduledAt.slice(11, 16) }} / {{ task.feedAmountKg }} 千克 / {{ task.status }}
-          </p>
-        </article>
-        <article>
-          <span>历史投喂记录</span>
-          <p v-for="record in feedingRecords" :key="record.id">
-            {{ record.executedAt.slice(0, 16).replace('T', ' ') }} / {{ record.feedAmountKg }} 千克
-          </p>
-        </article>
-      </div>
-
       <div v-else-if="activeModule === 'alerts'" class="list-layout">
         <article v-for="alert in alerts" :key="alert.id">
           <span>{{ alert.source }} / {{ alert.level }} / {{ alert.time }}</span>
@@ -664,16 +495,6 @@ onBeforeUnmount(() => {
           <p>mock 解释，后续由后端调用模型。</p>
         </article>
       </div>
-
-      <div v-else class="device-grid">
-        <article v-for="device in devices" :key="device.id">
-          <span>{{ device.type }}</span>
-          <strong>{{ device.name }}</strong>
-          <p>状态：{{ device.status }}</p>
-          <p>心跳时间：{{ device.lastHeartbeatAt ?? '等待心跳' }}</p>
-          <p>企业：{{ device.organizationId }}</p>
-        </article>
-      </div>
     </section>
   </section>
 </template>
@@ -690,10 +511,9 @@ onBeforeUnmount(() => {
 .extension-head,
 .module-grid button,
 .module-panel {
-  background: rgba(3, 14, 36, 0.15);
-  border: 1px solid rgba(121, 210, 255, 0.18);
-  box-shadow: 0 14px 30px rgba(3, 10, 28, 0.16);
-  backdrop-filter: blur(6px);
+  border: 1px solid var(--border-cyan);
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
 }
 
 .extension-head {
@@ -750,8 +570,8 @@ label span {
   display: grid;
   gap: 5px;
   padding: 10px 12px;
-  background: rgba(3, 14, 36, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.12);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 .tenant-status strong {
@@ -761,9 +581,7 @@ label span {
 .tenant-status em,
 .tenant-status span,
 .module-grid em,
-article p,
-.model-tip,
-.log-list {
+article p {
   color: var(--text-muted);
   font-size: 12px;
   font-style: normal;
@@ -777,7 +595,7 @@ article p,
 .module-grid {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -792,9 +610,9 @@ article p,
 }
 
 .module-grid button.active {
-  background: rgba(3, 14, 36, 0.28);
-  border-color: rgba(121, 210, 255, 0.44);
-  box-shadow: 0 0 22px rgba(91, 214, 255, 0.16);
+  border-color: var(--border-cyan-strong);
+  background: var(--panel-bg-strong);
+  border-radius: var(--panel-radius);
 }
 
 .module-grid strong {
@@ -817,8 +635,8 @@ article p,
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  background: rgba(3, 14, 36, 0.12);
-  border-bottom: 1px solid rgba(121, 210, 255, 0.1);
+  background: var(--panel-title-bg);
+  border-bottom: 1px solid var(--border-cyan);
 }
 
 .panel-toolbar strong {
@@ -827,9 +645,7 @@ article p,
 
 .scene-layout,
 .ai-layout,
-.model-layout,
-.list-layout,
-.device-grid {
+.list-layout {
   min-height: 0;
   padding: 16px;
   overflow: auto;
@@ -849,7 +665,7 @@ article p,
     linear-gradient(90deg, rgba(91, 214, 255, 0.1) 1px, transparent 1px),
     linear-gradient(rgba(91, 214, 255, 0.08) 1px, transparent 1px), rgba(3, 14, 36, 0.08);
   background-size: 42px 42px;
-  border: 1px solid rgba(121, 210, 255, 0.16);
+  border: 1px solid var(--border-cyan);
 }
 
 .scene-map::before {
@@ -871,7 +687,6 @@ article p,
   width: 5px;
   height: 5px;
   background: rgba(91, 214, 255, 0.6);
-  box-shadow: 0 0 10px rgba(91, 214, 255, 0.55);
 }
 
 .robot-dot {
@@ -879,7 +694,6 @@ article p,
   height: 22px;
   background: linear-gradient(135deg, #5bd6ff, #69e2a4);
   clip-path: polygon(50% 0, 100% 100%, 50% 74%, 0 100%);
-  box-shadow: 0 0 18px rgba(91, 214, 255, 0.85);
 }
 
 .detail-stack {
@@ -888,12 +702,11 @@ article p,
   gap: 10px;
 }
 
-article,
-.model-layout label {
+article {
   min-width: 0;
   padding: 12px;
-  background: rgba(3, 14, 36, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.12);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
 }
 
 article strong {
@@ -914,15 +727,15 @@ article strong {
 button {
   min-height: 32px;
   padding: 0 12px;
-  color: #dff8ff;
-  background: rgba(3, 14, 36, 0.2);
-  border: 1px solid rgba(121, 210, 255, 0.2);
+  color: var(--text-normal);
+  background: var(--panel-title-bg);
+  border: 1px solid var(--border-cyan);
   cursor: pointer;
 }
 
 button:disabled {
-  color: rgba(223, 248, 255, 0.42);
-  border-color: rgba(121, 210, 255, 0.08);
+  color: var(--text-subtle);
+  border-color: var(--border-cyan);
   cursor: not-allowed;
 }
 
@@ -966,65 +779,14 @@ button:disabled {
   border-radius: 50%;
 }
 
-.model-layout {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.model-layout label {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-}
-
-.model-layout label:nth-of-type(3),
-.model-tip,
-.wide,
-.log-list {
-  grid-column: 1 / -1;
-}
-
-input,
-select {
-  min-width: 0;
-  height: 32px;
-  padding: 0 9px;
-  color: #f4fcff;
-  background: rgba(3, 14, 36, 0.34);
-  border: 1px solid rgba(121, 210, 255, 0.16);
-  outline: none;
-}
-
-input[type='checkbox'] {
-  width: 18px;
-  height: 18px;
-}
-
-input:disabled {
-  color: rgba(244, 252, 255, 0.56);
-  background: rgba(3, 14, 36, 0.14);
-}
-
-.model-tip,
-.log-list {
-  margin: 0;
-  padding: 10px 12px;
-  background: rgba(3, 14, 36, 0.12);
-  border: 1px solid rgba(121, 210, 255, 0.12);
-}
-
-.list-layout,
-.device-grid {
+.list-layout {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-content: start;
   gap: 12px;
 }
 
-.list-layout article,
-.device-grid article {
+.list-layout article {
   min-height: 150px;
 }
 </style>
