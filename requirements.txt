@@ -1,1 +1,3 @@
--r agent_backend/requirements.txt
+fastapi>=0.115,<1.0
+pydantic-settings>=2.7,<3.0
+httpx==0.28.1
