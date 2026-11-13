@@ -154,15 +154,18 @@ export async function deleteRobot(organizationId: string, robotId: string): Prom
   }
 
   const robotUuid = await resolveRobotUuid(organizationId, robotId)
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('robots')
     .delete()
     .eq('organization_id', organizationId)
     .eq('id', robotUuid)
+    .select('id')
+    .maybeSingle()
 
   if (error) {
     throwSupabaseError(error, '删除机器人失败')
   }
+  if (!data) throw new Error('机器人已不存在，或当前账号无删除权限')
 
   return true
 }

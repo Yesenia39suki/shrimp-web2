@@ -125,6 +125,7 @@ function formatPosition(position?: RobotPositionLatest) {
     </nav>
 
     <div v-if="activeTab === 'robots'" class="robot-grid">
+      <p v-if="!store.robots.length" role="status">当前企业暂无机器人。</p>
       <article v-for="robot in store.robots" :key="robot.id" class="robot-panel">
         <div class="robot-title">
           <div>

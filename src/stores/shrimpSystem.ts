@@ -1392,9 +1392,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       const editablePonds = savedEditableConfig?.ponds?.length
         ? savedEditableConfig.ponds
         : defaultPonds
-      const editableRobots = savedEditableConfig?.robots?.length
-        ? savedEditableConfig.robots
-        : defaultRobots
+      const editableRobots = savedEditableConfig?.robots ?? defaultRobots
       const waterThresholdsByPond = {
         ...defaultThresholdsByPond,
         ...savedEditableConfig?.waterThresholdsByPond,
@@ -1500,14 +1498,13 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
 
       const selectedRobot =
         this.editableRobots.find((robot) => robot.pond_id === this.pondConfig.selectedPondId) ??
-        this.editableRobots[0]
+        this.editableRobots[0] ??
+        emptyRobot(this.organizationId, this.pondConfig.selectedPondId)
 
-      if (selectedRobot) {
-        this.businessConfig = {
-          ...this.businessConfig,
-          organization_id: this.organizationId,
-          robot: cloneData(selectedRobot),
-        }
+      this.businessConfig = {
+        ...this.businessConfig,
+        organization_id: this.organizationId,
+        robot: cloneData(selectedRobot),
       }
     },
     async reloadSupabaseRobots(selectedRobotId?: string) {
@@ -1589,12 +1586,13 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       )
       const selectedRobot =
         this.editableRobots.find((robot) => robot.pond_id === resolvedSelectedPondId) ??
-        this.editableRobots[0]
+        this.editableRobots[0] ??
+        emptyRobot(this.organizationId, resolvedSelectedPondId)
       const selectedThreshold =
         this.waterThresholdsByPond[resolvedSelectedPondId] ??
         toWaterThreshold(this.organizationId, resolvedSelectedPondId, this.thresholds.water)
 
-      if (selectedPond && selectedRobot) {
+      if (selectedPond) {
         this.businessConfig = {
           organization_id: this.organizationId,
           pond: cloneData(selectedPond),
@@ -1701,17 +1699,6 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       this.editableRobots = this.editableRobots.filter((robot) => robot.pond_id !== pondCode)
       delete this.waterThresholdsByPond[pondCode]
 
-      if (this.editableRobots.length === 0 && this.editablePonds[0]) {
-        this.editableRobots.push({
-          id: `robot-${this.organizationId}-${Date.now()}`,
-          organization_id: this.organizationId,
-          pond_id: this.editablePonds[0].pond_code,
-          robot_code: 'RB-01',
-          robot_name: '默认投喂机器人',
-          robot_type: '投喂巡检型',
-        })
-      }
-
       this.rebuildEditableRuntime(this.editablePonds[0]?.pond_code)
       this.persistEditableRuntime()
       return true
@@ -1745,7 +1732,9 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       return normalizedRobot
     },
     async addEditableRobot(pondCode?: string) {
-      const nextIndex = this.editableRobots.length + 1
+      const codes = new Set(this.editableRobots.map((robot) => robot.robot_code))
+      let nextIndex = this.editableRobots.length + 1
+      while (codes.has(`RB-${String(nextIndex).padStart(2, '0')}`)) nextIndex += 1
       const robot: Robot = {
         id: `robot-${this.organizationId}-${Date.now()}`,
         organization_id: this.organizationId,
@@ -1770,21 +1759,18 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       return robot
     },
     async deleteEditableRobot(robotId: string) {
-      if (this.editableRobots.length <= 1) {
-        return false
-      }
+      const robot = this.editableRobots.find((item) => item.id === robotId)
+      if (!robot) throw new Error('未找到机器人，请刷新后重试')
 
       if (isSupabaseMode) {
         await deleteRobot(this.organizationId, robotId)
-        await this.reloadSupabaseRobots()
-        return true
+        await this.loadSupabaseOrganizationData(this.organizationId)
+        return
       }
 
-      const robot = this.editableRobots.find((item) => item.id === robotId)
       this.editableRobots = this.editableRobots.filter((item) => item.id !== robotId)
-      this.rebuildEditableRuntime(robot?.pond_id ?? this.pondConfig.selectedPondId)
+      this.rebuildEditableRuntime(this.pondConfig.selectedPondId)
       this.persistEditableRuntime()
-      return true
     },
     async saveEditableThreshold(pondCode: string, threshold: WaterThreshold) {
       if (isSupabaseMode) {

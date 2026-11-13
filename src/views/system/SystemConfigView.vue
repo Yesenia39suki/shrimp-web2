@@ -331,11 +331,13 @@ async function handleDeletePond() {
 }
 
 async function handleAddRobot() {
+  if (isSaving.value) return
   if (!canEdit.value) {
     saveMessage.value = '当前账号仅有查看权限'
     return
   }
 
+  isSaving.value = true
   try {
     const robot = await store.addEditableRobot(selectedPondCode.value)
     selectedRobotId.value = robot.id
@@ -343,22 +345,33 @@ async function handleAddRobot() {
     saveMessage.value = '机器人已新增'
   } catch (error) {
     saveMessage.value = error instanceof Error ? error.message : '机器人新增失败'
+  } finally {
+    isSaving.value = false
   }
 }
 
 async function handleDeleteRobot() {
+  if (isSaving.value) return
   if (!canDelete.value) {
     saveMessage.value = '删除操作仅限所有者或管理员'
     return
   }
 
+  const robot = selectedRobot.value
+  if (!robot) return
+  const confirmation = `删除机器人「${robot.robot_name}」？关联的运行状态、坐标和指令记录也会删除。`
+  if (!window.confirm(confirmation)) return
+
+  isSaving.value = true
   try {
-    const deleted = await store.deleteEditableRobot(selectedRobotId.value)
+    await store.deleteEditableRobot(robot.id)
     selectedRobotId.value = store.editableRobots[0]?.id ?? ''
     syncRobotFormFromSelection()
-    saveMessage.value = deleted ? '机器人已删除' : '至少保留一个机器人'
+    saveMessage.value = '机器人已删除'
   } catch (error) {
     saveMessage.value = error instanceof Error ? error.message : '机器人删除失败'
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -441,7 +454,8 @@ function goNextSection() {
             </button>
           </div>
           <div v-else-if="activeSection === 'robot'" class="panel-tools">
-            <select v-model="selectedRobotId" :disabled="store.loading">
+            <select v-model="selectedRobotId" :disabled="store.loading || isSaving || !selectedRobot">
+              <option v-if="!selectedRobot" value="">暂无机器人</option>
               <option v-for="robot in store.editableRobots" :key="robot.id" :value="robot.id">
                 {{ robot.robot_code }} / {{ robot.robot_name }}
               </option>
@@ -456,7 +470,7 @@ function goNextSection() {
             <button
               type="button"
               class="danger"
-              :disabled="!canDelete || isSaving || !selectedRobot"
+              :disabled="!canDelete || isSaving || store.loading || !selectedRobot"
               @click="handleDeleteRobot"
             >
               删除
@@ -504,7 +518,7 @@ function goNextSection() {
           </label>
         </div>
 
-        <div v-else-if="activeSection === 'robot'" class="form-grid">
+        <div v-else-if="activeSection === 'robot' && selectedRobot" class="form-grid">
           <label>
             <span>机器人编号</span>
             <input v-model.trim="robotForm.robot_code" :disabled="!canEdit" type="text" />
@@ -536,6 +550,10 @@ function goNextSection() {
             <p>虾池：{{ robotForm.pond_id }}</p>
             <p>机器人：{{ robotForm.robot_code }} / {{ robotForm.robot_name }}</p>
           </div>
+        </div>
+
+        <div v-else-if="activeSection === 'robot'" class="form-grid">
+          <p class="preview-box wide" role="status">当前企业暂无机器人。</p>
         </div>
 
         <div v-else-if="activeSection === 'threshold'" class="threshold-list">

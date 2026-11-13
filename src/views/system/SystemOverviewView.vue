@@ -440,33 +440,36 @@ function buildPolyline(values: number[], width = 160, height = 42, padding = 5) 
             <strong>机器人巡航窗口</strong>
             <span>{{ selectedRobot?.id }}</span>
           </div>
-          <div class="device-visual">
-            <i class="tower"></i>
-            <i class="dock"></i>
-            <i class="track"></i>
-          </div>
-          <div class="device-meta">
-            <span>{{ selectedRobot?.name }}</span>
-            <strong>{{ selectedRobot?.currentTask }}</strong>
-          </div>
-          <div class="device-status-grid">
-            <article>
-              <span>电量</span>
-              <strong>{{ selectedRobot?.battery }}%</strong>
-            </article>
-            <article>
-              <span>投喂机</span>
-              <strong>{{ selectedRobot?.feederStatus }}</strong>
-            </article>
-            <article>
-              <span>运动</span>
-              <strong>{{ selectedRobot?.motionStatus }}</strong>
-            </article>
-            <article>
-              <span>下次计划</span>
-              <strong>{{ selectedRobot?.nextPlanAt }}</strong>
-            </article>
-          </div>
+          <p v-if="!selectedRobot" class="stage-empty">当前企业暂无机器人。</p>
+          <template v-else>
+            <div class="device-visual">
+              <i class="tower"></i>
+              <i class="dock"></i>
+              <i class="track"></i>
+            </div>
+            <div class="device-meta">
+              <span>{{ selectedRobot.name }}</span>
+              <strong>{{ selectedRobot.currentTask }}</strong>
+            </div>
+            <div class="device-status-grid">
+              <article>
+                <span>电量</span>
+                <strong>{{ selectedRobot.battery }}%</strong>
+              </article>
+              <article>
+                <span>投喂机</span>
+                <strong>{{ selectedRobot.feederStatus }}</strong>
+              </article>
+              <article>
+                <span>运动</span>
+                <strong>{{ selectedRobot.motionStatus }}</strong>
+              </article>
+              <article>
+                <span>下次计划</span>
+                <strong>{{ selectedRobot.nextPlanAt }}</strong>
+              </article>
+            </div>
+          </template>
         </section>
 
         <section class="floating-panel panel-right-bottom">
