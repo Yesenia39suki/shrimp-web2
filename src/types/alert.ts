@@ -13,6 +13,10 @@ export interface Alert {
   level: AlertLevel
   title: string
   content: string
+  metricKey?: string
+  currentValue?: string
+  normalRange?: string
+  suggestion?: string
   readStatus: AlertReadStatus
   createdAt: string
   resolvedAt?: string

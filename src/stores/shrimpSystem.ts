@@ -67,6 +67,7 @@ export interface SystemAlert {
   normalRange: string
   suggestion: string
   level: AlertLevel
+  pondId?: string
   metricKey?: string
 }
 
@@ -879,6 +880,10 @@ function mapDatabaseAlert(alert: {
   title: string
   content: string
   pondId?: string
+  metricKey?: string
+  currentValue?: string
+  normalRange?: string
+  suggestion?: string
 }) {
   const sourceMap: Record<string, MetricSource> = {
     water_quality: '水质参数',
@@ -895,9 +900,11 @@ function mapDatabaseAlert(alert: {
     source: sourceMap[alert.type] ?? '模型评估',
     type: alert.title,
     reason: alert.content,
-    currentValue: alert.pondId ?? '数据库报警',
-    normalRange: '见报警详情',
-    suggestion: '请进入报警中心处理。',
+    pondId: alert.pondId,
+    metricKey: alert.metricKey === 'dissolved_oxygen' ? 'oxygen' : alert.metricKey,
+    currentValue: alert.currentValue ?? alert.pondId ?? '数据库报警',
+    normalRange: alert.normalRange ?? '见报警详情',
+    suggestion: alert.suggestion ?? '请进入报警中心处理。',
     level: alert.level === 'critical' || alert.level === 'warning' ? '预警' : '关注',
   } satisfies SystemAlert
 }
@@ -1016,7 +1023,11 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
     },
     waterAlerts(state): SystemAlert[] {
       if (isSupabaseMode) {
-        return state.alerts.filter((alert) => alert.source === '水质参数')
+        return state.alerts.filter(
+          (alert) =>
+            alert.source === '水质参数' &&
+            (!alert.pondId || alert.pondId === state.pondConfig.selectedPondId),
+        )
       }
 
       return buildRangeAlerts(state.waterMetrics, state.thresholds.water, '水质参数')
@@ -1243,12 +1254,11 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
               (alert) => !alert.pondId || alert.pondId === pond.id || alert.pondId === pondCode,
             )
             const hasCritical = pondAlerts.some((alert) => alert.level === 'critical')
-            const hasWarning = pondAlerts.some((alert) => alert.level === 'warning')
 
             return {
               pondId: pondCode,
               species: pond.shrimp_species,
-              systemStatus: hasCritical ? '风险预警' : hasWarning ? '需要关注' : '运行稳定',
+              systemStatus: hasCritical ? '风险预警' : pondAlerts.length ? '需要关注' : '运行稳定',
               waterMetrics: buildSupabaseWaterMetrics(latest, waterDaily),
               shrimpMetrics: buildSupabaseShrimpMetrics({
                 organizationId,

@@ -16,7 +16,9 @@ const trendKeys = ['temperature', 'oxygen', 'ph']
 const rangeKeys = ['temperature', 'oxygen', 'ph', 'ammonia', 'nitrite']
 
 const latestUpdate = computed(() => store.waterMetrics[0]?.updatedAt ?? '当前')
-const normalCount = computed(() => store.waterMetrics.length - store.waterAlerts.length)
+const normalCount = computed(
+  () => store.waterMetrics.filter((metric) => !getAlert(metric.key)).length,
+)
 
 const overallState = computed(() => {
   if (store.waterAlerts.length === 0) {
@@ -129,7 +131,7 @@ function buildTrendOption(): echarts.EChartsOption {
       type: 'line',
       smooth: true,
       symbolSize: 5,
-      data: metric.trend,
+      data: metric.trend.slice(-7),
       lineStyle: {
         width: 2,
         shadowBlur: 10,
