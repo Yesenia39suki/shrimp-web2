@@ -85,6 +85,7 @@ export async function createRobot(organizationId: string, payload: Partial<Robot
       .from('ponds')
       .select('id')
       .eq('organization_id', organizationId)
+      .is('archived_at', null)
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle()

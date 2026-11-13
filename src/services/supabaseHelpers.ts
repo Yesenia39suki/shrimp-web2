@@ -67,6 +67,7 @@ export async function resolvePondUuid(organizationId: string, pondIdOrCode: stri
     .from('ponds')
     .select('id')
     .eq('organization_id', organizationId)
+    .is('archived_at', null)
     .limit(1)
 
   const { data, error } = isUuidLike(pondIdOrCode)

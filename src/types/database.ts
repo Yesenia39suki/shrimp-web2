@@ -74,6 +74,7 @@ export interface PondRow {
   location: string
   longitude: number | null
   latitude: number | null
+  archived_at?: string | null
   created_at: string
   updated_at: string
 }

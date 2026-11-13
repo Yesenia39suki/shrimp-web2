@@ -4,7 +4,7 @@ import { isSupabaseMode } from '@/config/dataSource'
 import { getAlerts } from '@/services/alertService'
 import { getDevices } from '@/services/deviceService'
 import { getPondDailySnapshots } from '@/services/pondSnapshotService'
-import { createPond, deletePond, getPonds, updatePond } from '@/services/pondService'
+import { archivePond, createPond, getPonds, getReservedPondCodes, updatePond } from '@/services/pondService'
 import { createRobot, deleteRobot, getRobots, getRobotStatus, updateRobot } from '@/services/robotService'
 import { getShrimpDailyStats, getShrimpMeasurements } from '@/services/shrimpGrowthService'
 import {
@@ -1213,6 +1213,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
           ponds.find((pond) => pond.pond_code === this.pondConfig.selectedPondId) ?? ponds[0]
         const selectedPondCode = selectedPond?.pond_code ?? ''
         const pondCodeByUuid = new Map(ponds.map((pond) => [pond.id, pond.pond_code]))
+        const activeAlerts = alerts.filter((alert) => !alert.pondId || pondCodeByUuid.has(alert.pondId))
         const editableRobots = robots.map((robot) => ({
           ...robot,
           pond_id: pondCodeByUuid.get(robot.pond_id) ?? robot.pond_id,
@@ -1250,7 +1251,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
             shrimpDailyStats[pondCode] = shrimpDaily
             snapshots.push(...pondSnapshots)
 
-            const pondAlerts = alerts.filter(
+            const pondAlerts = activeAlerts.filter(
               (alert) => !alert.pondId || alert.pondId === pond.id || alert.pondId === pondCode,
             )
             const hasCritical = pondAlerts.some((alert) => alert.level === 'critical')
@@ -1318,7 +1319,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
         this.devices = devices
         this.snapshots = snapshots
         this.robotStatusById = cloneData(robotStatusById)
-        this.alerts = alerts.map((alert) =>
+        this.alerts = activeAlerts.map((alert) =>
           mapDatabaseAlert({
             ...alert,
             pondId: alert.pondId ? (pondCodeByUuid.get(alert.pondId) ?? alert.pondId) : undefined,
@@ -1647,7 +1648,13 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       this.persistEditableRuntime()
     },
     async addEditablePond() {
-      const nextIndex = this.editablePonds.length + 1
+      const codes = new Set(
+        isSupabaseMode
+          ? await getReservedPondCodes(this.organizationId)
+          : this.editablePonds.map((pond) => pond.pond_code),
+      )
+      let nextIndex = this.editablePonds.length + 1
+      while (codes.has(`P-${String(nextIndex).padStart(2, '0')}`)) nextIndex += 1
       const pondCode = `P-${String(nextIndex).padStart(2, '0')}`
       const pond: Pond = {
         id: `pond-${this.organizationId}-${Date.now()}`,
@@ -1683,7 +1690,9 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       }
 
       if (isSupabaseMode) {
-        await deletePond(this.organizationId, pondCode)
+        const pond = this.editablePonds.find((item) => item.pond_code === pondCode)
+        if (!pond) throw new Error('未找到池塘，请刷新后重试')
+        await archivePond(this.organizationId, pond.id)
         await this.loadSupabaseOrganizationData(this.organizationId)
         return true
       }

@@ -305,7 +305,7 @@ class SupabaseGateway:
         return await self._get_rows(
             table="ponds",
             access_token=access_token,
-            params={"select": self._POND_SELECT, "order": "pond_code.asc"},
+            params={"select": self._POND_SELECT, "archived_at": "is.null", "order": "pond_code.asc"},
             model=PondResponse,
         )
 

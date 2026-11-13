@@ -14,6 +14,7 @@ export async function getPonds(organizationId: string): Promise<Pond[]> {
     .from('ponds')
     .select('*')
     .eq('organization_id', organizationId)
+    .is('archived_at', null)
     .order('pond_code', { ascending: true })
 
   if (error) {
@@ -29,7 +30,12 @@ export async function getPondById(organizationId: string, pondId: string): Promi
     return ponds.find((pond) => pond.id === pondId || pond.pond_code === pondId) ?? null
   }
 
-  const query = supabase.from('ponds').select('*').eq('organization_id', organizationId).limit(1)
+  const query = supabase
+    .from('ponds')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .is('archived_at', null)
+    .limit(1)
   const { data, error } = /^[0-9a-f-]{36}$/i.test(pondId)
     ? await query.eq('id', pondId).maybeSingle()
     : await query.eq('pond_code', pondId).maybeSingle()
@@ -62,6 +68,7 @@ export async function createPond(organizationId: string, payload: Partial<Pond>)
     .single()
 
   if (error) {
+    if (error.code === '23505') throw new Error('池塘编号已存在，请使用其他编号')
     throwSupabaseError(error, '新增池塘失败')
   }
 
@@ -88,35 +95,42 @@ export async function updatePond(
     .update(mapPondUpdate(payload))
     .eq('organization_id', organizationId)
     .eq('id', pondUuid)
+    .is('archived_at', null)
     .select('*')
     .single()
 
   if (error) {
+    if (error.code === '23505') throw new Error('池塘编号已存在，请使用其他编号')
     throwSupabaseError(error, '保存池塘失败')
   }
 
   return mapPondRow(data)
 }
 
-export async function deletePond(organizationId: string, pondId: string): Promise<boolean> {
-  if (isMockMode) {
-    void organizationId
-    void pondId
-    return Promise.resolve(true)
-  }
-
-  const pondUuid = await resolvePondUuid(organizationId, pondId)
-  const { error } = await supabase
+export async function archivePond(organizationId: string, pondId: string): Promise<void> {
+  const { data, error } = await supabase
     .from('ponds')
-    .delete()
+    .update({ archived_at: new Date().toISOString() })
     .eq('organization_id', organizationId)
-    .eq('id', pondUuid)
+    .eq('id', pondId)
+    .is('archived_at', null)
+    .select('id')
+    .maybeSingle()
 
   if (error) {
-    throwSupabaseError(error, '删除池塘失败')
+    if (error.code === 'P0001') throw new Error(error.message)
+    throwSupabaseError(error, '归档池塘失败')
   }
+  if (!data) throw new Error('池塘已归档、已不存在，或当前账号无操作权限')
+}
 
-  return true
+export async function getReservedPondCodes(organizationId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('ponds')
+    .select('pond_code')
+    .eq('organization_id', organizationId)
+  if (error) throwSupabaseError(error, '读取池塘编号失败')
+  return (data ?? []).map((row) => row.pond_code)
 }
 
 export async function setCurrentPond(organizationId: string, pondId: string): Promise<boolean> {
@@ -144,6 +158,7 @@ export async function updatePondMapPosition(
     })
     .eq('organization_id', organizationId)
     .eq('id', pondUuid)
+    .is('archived_at', null)
 
   if (error) {
     throwSupabaseError(error, '保存池塘地图位置失败')

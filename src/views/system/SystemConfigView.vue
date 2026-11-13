@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 
+import { isSupabaseMode } from '@/config/dataSource'
 import { cloneBusinessConfig } from '@/services/mockDataService'
 import { useAuthStore } from '@/stores/authStore'
 import { useShrimpSystemStore } from '@/stores/shrimpSystem'
@@ -273,11 +274,13 @@ function handleReset() {
 }
 
 async function handleAddPond() {
+  if (isSaving.value) return
   if (!canEdit.value) {
     saveMessage.value = '当前账号仅有查看权限'
     return
   }
 
+  isSaving.value = true
   try {
     const pond = await store.addEditablePond()
     selectedPondCode.value = pond.pond_code
@@ -285,22 +288,45 @@ async function handleAddPond() {
     saveMessage.value = '池塘已新增'
   } catch (error) {
     saveMessage.value = error instanceof Error ? error.message : '池塘新增失败'
+  } finally {
+    isSaving.value = false
   }
 }
 
 async function handleDeletePond() {
+  if (isSaving.value) return
   if (!canDelete.value) {
     saveMessage.value = '删除操作仅限所有者或管理员'
     return
   }
 
+  const pond = selectedPond.value
+  if (!pond) return
+  if (store.editablePonds.length <= 1) {
+    saveMessage.value = '至少保留一个在用池塘'
+    return
+  }
+  if (isSupabaseMode) {
+    const robots = store.editableRobots.filter((robot) => robot.pond_id === pond.pond_code)
+    if (robots.length) {
+      saveMessage.value = `池塘仍绑定 ${robots.map((robot) => robot.robot_name).join('、')}，请在「机器人信息」中改绑后重试。`
+      return
+    }
+    if (!window.confirm(`归档「${pond.pond_name}」？归档后将从日常监测列表移除，历史数据和审计记录会保留。`)) return
+  }
+
+  isSaving.value = true
   try {
-    const deleted = await store.deleteEditablePond(selectedPondCode.value)
+    const deleted = await store.deleteEditablePond(pond.pond_code)
     selectedPondCode.value = store.pondConfig.selectedPondId
     syncPondFormFromSelection()
-    saveMessage.value = deleted ? '池塘已删除' : '至少保留一个池塘'
+    saveMessage.value = deleted
+      ? (isSupabaseMode ? '池塘已归档，历史数据已保留' : '池塘已删除')
+      : '至少保留一个在用池塘'
   } catch (error) {
-    saveMessage.value = error instanceof Error ? error.message : '池塘删除失败'
+    saveMessage.value = error instanceof Error ? error.message : '池塘操作失败'
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -397,7 +423,7 @@ function goNextSection() {
             <span>{{ activeSectionInfo.description }}</span>
           </div>
           <div v-if="activeSection === 'pond'" class="panel-tools">
-            <select v-model="selectedPondCode" :disabled="store.loading">
+            <select v-model="selectedPondCode" :disabled="store.loading || isSaving">
               <option v-for="pond in store.editablePonds" :key="pond.id" :value="pond.pond_code">
                 {{ pond.pond_code }} / {{ pond.pond_name }}
               </option>
@@ -408,10 +434,10 @@ function goNextSection() {
             <button
               type="button"
               class="danger"
-              :disabled="!canDelete || isSaving || !selectedPond"
+              :disabled="!canDelete || isSaving || store.loading || !selectedPond"
               @click="handleDeletePond"
             >
-              删除
+              {{ isSupabaseMode ? '归档' : '删除' }}
             </button>
           </div>
           <div v-else-if="activeSection === 'robot'" class="panel-tools">

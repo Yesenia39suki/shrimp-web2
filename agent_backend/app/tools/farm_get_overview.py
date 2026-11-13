@@ -282,9 +282,9 @@ async def farm_get_overview(
 
     for alert in alert_rows:
         key = (alert.organization_id, alert.pond_id) if alert.pond_id else None
-        if key is None or key not in pond_keys:
+        if key is None:
             global_alerts.append(alert)
-        else:
+        elif key in pond_keys:
             alerts_by_pond[key].append(alert)
 
     pond_overviews: list[PondOverview] = []
