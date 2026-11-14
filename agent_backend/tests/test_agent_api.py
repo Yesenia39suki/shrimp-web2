@@ -282,7 +282,7 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.json()["evidence"], [])
         self.assertNotIn("伪造的结果", response.json()["answer"])
 
-    async def test_chat_lists_each_alert_and_stale_metric_with_distinct_actions(self) -> None:
+    async def test_chat_analyzes_older_readings_and_lists_each_alert(self) -> None:
         timestamp = "2026-08-19T03:48:07Z"
         self.thresholds_pond = POND_ID_2
         self.water_readings = [{
@@ -305,33 +305,61 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
                 ("oxygen", "溶解氧异常", "10.5 mg/L", "5 - 9 mg/L"),
             ], start=1)
         ]
+        self.provider.content = {
+            "kind": "pond", "answer": "水质已经过期。", "fact_ids": ["P1.water_availability"],
+        }
 
         response = await self.client.post(
             "/api/v1/agent/chat",
             headers={"Authorization": "Bearer user-token"},
-            json={"pond_id": POND_ID_2, "question": "根据当前池子，有什么推荐的意见建议"},
+            json={"pond_id": POND_ID_2, "question": "池1的虾符合其生长环境吗，异常值有什么，都应该如何处理"},
         )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertIn("2 条未处理报警，历史记录有 8 项越界", payload["answer"])
-        self.assertIn("过期读数未用于当前水质评分", payload["answer"])
+        self.assertIn("2 条未处理报警，最新水质读数有 8 项越界", payload["answer"])
+        self.assertIn("不符合设定范围", payload["answer"])
+        self.assertEqual(payload["answer"].count("超过 24 小时"), 1)
+        self.assertNotIn("过期", json.dumps(payload, ensure_ascii=False))
+        facts = {fact["fact_id"]: fact["statement"] for fact in json.loads(self.provider.user_prompt)["facts"]}
+        self.assertIn("高风险", facts["P1.risk"])
+        self.assertNotIn("超过", facts["P1.risk"])
         items = payload["issues"]
-        self.assertEqual(len(items), 11)
-        self.assertEqual(items[0]["title"], "水质数据已过期")
-        self.assertEqual([item["title"] for item in items[1:3]], ["pH 异常（偏高）", "溶解氧异常（偏高）"])
-        self.assertEqual(items[1]["recorded_at"], timestamp)
-        self.assertIn("总碱度", items[1]["actions"][1])
-        self.assertIn("饱和度", items[2]["actions"][1])
+        self.assertEqual(len(items), 10)
+        self.assertEqual([item["title"] for item in items[:2]], ["pH 异常（偏高）", "溶解氧异常（偏高）"])
+        self.assertEqual(items[0]["recorded_at"], timestamp)
+        self.assertIn("总碱度", items[0]["actions"][1])
+        self.assertIn("饱和度", items[1]["actions"][1])
         oxygen = next(item for item in items if item["id"] == "metric-dissolved_oxygen")
         ph = next(item for item in items if item["id"] == "metric-ph")
         self.assertIn("10.5mg/L", oxygen["trigger"])
         self.assertIn("差值 1.5mg/L", oxygen["trigger"])
-        self.assertIn("现场复测", oxygen["actions"][0])
-        self.assertIn("饱和度", oxygen["actions"][1])
-        self.assertIn("总碱度", ph["actions"][1])
+        self.assertIn("饱和度", oxygen["actions"][0])
+        self.assertIn("总碱度", ph["actions"][0])
         self.assertTrue(all(item["impact"] and len(item["actions"]) >= 2 and item["verify"] for item in items))
         self.assertEqual(self.provider.calls, 1)
+
+    async def test_chat_answers_latest_metric_on_both_sides_of_24_hours(self) -> None:
+        self.provider.content = {
+            "kind": "pond", "answer": "没有有效读数，数据已过期。", "fact_ids": ["P1.water_availability"],
+        }
+        for hours in (23, 25):
+            with self.subTest(hours=hours):
+                timestamp = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
+                self.water_readings = [{
+                    "organization_id": ORGANIZATION_ID, "pond_id": POND_ID, "ph": 9.05,
+                    "recorded_at": timestamp, "updated_at": timestamp,
+                }]
+                reply = await self.client.post(
+                    "/api/v1/agent/chat", headers={"Authorization": "Bearer user-token"},
+                    json={"pond_id": POND_ID, "question": "现在 pH 多少，正常吗？"},
+                )
+                self.assertEqual(reply.status_code, 200)
+                payload = reply.json()
+                self.assertIn("9.05", payload["answer"])
+                self.assertIn("偏高", payload["answer"])
+                self.assertNotIn("过期", payload["answer"])
+                self.assertEqual(payload["answer"].count("超过 24 小时"), int(hours > 24))
 
     async def test_chat_explains_confirmed_low_oxygen_with_follow_up_checks(self) -> None:
         timestamp = datetime.now(UTC).isoformat()
@@ -352,7 +380,7 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
         issues = response.json()["issues"]
         self.assertEqual(len(issues), 1)
         self.assertEqual(issues[0]["title"], "溶解氧偏低")
-        self.assertEqual(issues[0]["status"], "有效读数越界")
+        self.assertEqual(issues[0]["status"], "最新读数越界")
         self.assertIn("备用增氧机", issues[0]["actions"][1])
         self.assertIn("复测", issues[0]["verify"])
 

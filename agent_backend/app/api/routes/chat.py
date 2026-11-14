@@ -48,6 +48,7 @@ async def chat_with_pond_assistant(
                 device_heartbeat_stale_after_minutes=settings.device_heartbeat_stale_after_minutes,
                 water_history_days=water_history_days(payload),
                 pond_id=payload.pond_id,
+                use_latest_water_for_risk=True,
             ), payload.pond_id)
             history = await gateway.list_agent_advice_history(
                 access_token, pond_id=payload.pond_id, limit=3,

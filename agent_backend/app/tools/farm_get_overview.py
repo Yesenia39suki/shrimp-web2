@@ -208,6 +208,7 @@ async def farm_get_overview(
     device_heartbeat_stale_after_minutes: int = 30,
     water_history_days: int = 7,
     pond_id: UUID | None = None,
+    use_latest_water_for_risk: bool = False,
     now: datetime | None = None,
 ) -> FarmOverviewResponse:
     """组合 RLS 可见数据；不接收 organization_id，也不调用大模型。"""
@@ -323,7 +324,8 @@ async def farm_get_overview(
             thresholds=thresholds,
             active_alerts=pond_alerts,
             water_data_stale=(
-                latest_water is not None
+                not use_latest_water_for_risk
+                and latest_water is not None
                 and _age_seconds(
                     now=evaluation_time,
                     observed_at=latest_water.recorded_at,

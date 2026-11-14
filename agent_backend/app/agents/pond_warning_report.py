@@ -12,6 +12,8 @@ REPORT_QUESTION = re.compile(
     r"(?:逐条|分别|每条|每项|各项|哪些|有什么).{0,16}(?:预警|告警|报警|异常)|"
     r"(?:预警|告警|报警|异常).{0,12}(?:经过|原因|解释|处理|解决)|"
     r"(?:为什么|为啥).{0,8}(?:预警|告警|报警)|"
+    r"异常(?:项|值|指标)?(?:有)?(?:什么|哪些)|"
+    r"(?:符合|适合|适宜).{0,10}(?:生长|养殖).{0,4}(?:环境|条件)|"
     r"(?:池子|池塘|本池|当前池).{0,24}(?:建议|改进|改善|处理|分析|怎么办)"
 )
 POND_ADVICE_QUESTION = re.compile(r"建议|意见|处理|解决|改进|改善|分析|怎么办")
@@ -217,32 +219,27 @@ def _number(value: Decimal) -> str:
 
 def _metric_item(metric: WaterMetricAssessment, pond: PondOverview) -> ChatWarningItem:
     handling = HANDLING.get(metric.key, {}).get(metric.status, GENERAL_HANDLING)
-    stale = pond.risk.water_data_stale
     bound = metric.minimum if metric.status == "偏低" else metric.maximum
     assert metric.value is not None and bound is not None
     comparison = "低于下限" if metric.status == "偏低" else "高于上限"
     trigger = (
-        f"{'历史记录' if stale else '最近一次有效记录'}为 {_number(metric.value)}{metric.unit}，"
+        f"最新读数为 {_number(metric.value)}{metric.unit}，"
         f"{comparison} {_number(bound)}{metric.unit}，差值 {_number(abs(metric.value - bound))}{metric.unit}。"
     )
     return ChatWarningItem(
         id=f"metric-{metric.key}", title=f"{metric.label}{metric.status}",
-        status="历史异常 · 待复测" if stale else "有效读数越界",
+        status="最新读数越界",
         recorded_at=pond.latest_water.recorded_at if pond.latest_water else None,
         trigger=trigger, impact=handling.impact,
-        actions=["先现场复测，确认仍越界后再按下面的步骤排查或处理。", *handling.actions]
-        if stale else list(handling.actions),
+        actions=list(handling.actions),
         verify=handling.verify,
     )
 
 
-def _freshness_item(pond: PondOverview) -> ChatWarningItem | None:
+def _missing_data_item(pond: PondOverview) -> ChatWarningItem | None:
     if pond.latest_water is None:
         title = "暂无水质读数"
         trigger = "系统尚未收到该池可用于评估的水质记录。"
-    elif pond.risk.water_data_stale:
-        title = "水质数据已过期"
-        trigger = f"最新读数已超过系统设定的 {pond.risk.water_stale_after_hours} 小时有效期。"
     elif pond.risk.missing_metrics:
         title = "部分水质数据或阈值缺失"
         trigger = f"以下指标缺少读数或配置阈值：{'、'.join(pond.risk.missing_metrics)}。"
@@ -251,18 +248,18 @@ def _freshness_item(pond: PondOverview) -> ChatWarningItem | None:
     return ChatWarningItem(
         id="water-freshness", title=title, status="优先核实",
         recorded_at=pond.latest_water.recorded_at if pond.latest_water else None,
-        trigger=trigger, impact="现有记录不足以确认当前水质。旧报警和旧读数可用来确定复测重点。",
+        trigger=trigger, impact="已有实测可逐项分析，缺少读数或阈值的项目需要另外核实。",
         actions=["优先现场测溶解氧、pH、水温、氨氮和亚硝酸盐，并记录点位、时间和单位。",
                  "核对采集设备、上传链路和缺失的阈值设置，把复测值录入系统。"],
-        verify="用最新有效记录重新判断各项指标，并逐条核对仍未处理的报警。",
+        verify="补全记录后核对各项指标与仍未处理的报警。",
     )
 
 
 def build_warning_report(pond: PondOverview) -> PondChatResponse:
     issues = []
-    freshness = _freshness_item(pond)
-    if freshness is not None:
-        issues.append(freshness)
+    missing_data = _missing_data_item(pond)
+    if missing_data is not None:
+        issues.append(missing_data)
     alerts = [_alert_item(alert) for alert in pond.active_alerts if alert.read_status != "resolved"]
     metrics = [
         _metric_item(metric, pond) for metric in pond.metrics
@@ -275,17 +272,17 @@ def build_warning_report(pond: PondOverview) -> PondChatResponse:
     issues.extend(metrics)
     pond_code = pond.pond.pond_code
     if not issues:
-        return PondChatResponse(answer=f"{pond_code} 的有效水质读数均在配置阈值内，暂无未处理报警。继续按日常计划巡测即可。")
-    reading_status = "历史记录" if pond.risk.water_data_stale else "有效读数"
-    summary = f"{pond_code} 当前有 {len(alerts)} 条未处理报警，{reading_status}有 {len(metrics)} 项越界。"
-    if pond.risk.water_data_stale:
-        summary += "先复测，再判断历史异常是否仍然存在。"
-    elif freshness:
-        summary += "先补测或核对缺失数据，再判断是否需要采取措施。"
-    if pond.risk.water_data_stale and alerts:
-        summary += f"系统显示的「{pond.risk.risk_level}」来自未处理报警；过期读数未用于当前水质评分。"
+        return PondChatResponse(answer=f"{pond_code} 的最新水质读数均在配置阈值内，暂无未处理报警。继续按日常计划巡测即可。")
+    if pond.latest_water is None:
+        summary = f"{pond_code} 暂无水质读数，现有 {len(alerts)} 条未处理报警。"
+    else:
+        summary = f"{pond_code} 有 {len(alerts)} 条未处理报警，最新水质读数有 {len(metrics)} 项越界。"
+        if metrics:
+            summary += "按本池配置阈值判断，这些水质指标不符合设定范围，下面逐项给出处置办法。"
+        if missing_data:
+            summary += "缺少读数或阈值的项目需另行核实。"
     sources = [ChatWebSource(
         source_id="water-guide", title="农业农村部 · 夏季水产养殖技术指引",
         url="https://yyj.moa.gov.cn/scyz/202306/t20230620_6430587.htm",
-    )] if metrics or freshness else []
+    )] if metrics or missing_data else []
     return PondChatResponse(answer=summary, issues=issues, sources=sources)
