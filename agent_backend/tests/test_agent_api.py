@@ -1,7 +1,8 @@
 """智能建议 API 测试。"""
 
+import json
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import httpx
@@ -92,6 +93,7 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
         self.organization_id_2 = ORGANIZATION_ID
         self.chat_history_pond = None
         self.water_readings: list[dict[str, object]] = []
+        self.water_daily: list[dict[str, object]] = []
         self.active_alerts: list[dict[str, object]] = []
         self.thresholds_pond = POND_ID
 
@@ -135,6 +137,8 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
                 )
             if path == "/rest/v1/water_latest":
                 return httpx.Response(200, json=self.water_readings)
+            if path == "/rest/v1/water_daily_stats":
+                return httpx.Response(200, json=self.water_daily)
             if path == "/rest/v1/water_thresholds":
                 return httpx.Response(
                     200,
@@ -170,7 +174,6 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
             if path in {
                 "/rest/v1/shrimp_daily_stats",
                 "/rest/v1/feeding_daily_stats",
-                "/rest/v1/water_daily_stats",
                 "/rest/v1/devices",
                 "/rest/v1/robot_status",
             }:
@@ -185,6 +188,7 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
         app.dependency_overrides[get_supabase_gateway] = lambda: self.gateway
         self.provider = FakeModelProvider()
         app.dependency_overrides[get_model_provider] = lambda: self.provider
+        app.dependency_overrides[get_web_search] = lambda: None
         self.audit_writer = FakeAuditWriter()
         app.dependency_overrides[get_advice_audit_writer] = lambda: self.audit_writer
         self.client = httpx.AsyncClient(
@@ -327,7 +331,7 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("饱和度", oxygen["actions"][1])
         self.assertIn("总碱度", ph["actions"][1])
         self.assertTrue(all(item["impact"] and len(item["actions"]) >= 2 and item["verify"] for item in items))
-        self.assertEqual(self.provider.calls, 0)
+        self.assertEqual(self.provider.calls, 1)
 
     async def test_chat_explains_confirmed_low_oxygen_with_follow_up_checks(self) -> None:
         timestamp = datetime.now(UTC).isoformat()
@@ -360,7 +364,6 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
         )]
         provider = AsyncMock()
         drafts = [
-            {"kind": "pond", "answer": "养殖的是南美白对虾。", "fact_ids": ["P1.identity"]},
             {
                 "kind": "pond", "answer": "养殖的是南美白对虾，目前缺少最新水质读数。",
                 "fact_ids": ["P1.identity", "P1.water_availability"],
@@ -388,6 +391,84 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(payload["evidence"]), 2)
         lookup.search.assert_awaited_once()
         self.assertNotIn("P-01", lookup.search.call_args.args[0])
+
+    async def test_chat_reads_daily_maximum_and_resolves_temperature_follow_up(self) -> None:
+        day = (datetime.now(UTC) - timedelta(days=12)).date().isoformat()
+        self.water_daily = [{
+            "organization_id": ORGANIZATION_ID, "pond_id": POND_ID, "stat_date": day,
+            "avg_temperature": 31.2, "max_temperature": 36.8, "min_temperature": 25,
+            "warning_count": 0, "reading_count": 7, "status": "稳定",
+        }]
+        headers = {"Authorization": "Bearer user-token"}
+        first = await self.client.post("/api/v1/agent/chat", headers=headers, json={
+            "pond_id": POND_ID, "question": "最高温是多少",
+        })
+        self.assertEqual(first.status_code, 200)
+        self.assertIn("36.8℃", first.json()["answer"])
+        self.assertIn(day, first.json()["answer"])
+        self.assertNotIn("31.2", first.json()["answer"])
+        self.assertEqual(self.provider.calls, 0)
+        search = AsyncMock()
+        search.search.return_value = [SearchHit(
+            ChatWebSource(source_id="W1", title="高温期养殖指引", url="https://example.edu/heat"),
+            "高温期要关注底层缺氧。有遮阴设施可减少午后直晒。",
+        )]
+        provider = FakeModelProvider({
+            "kind": "pond", "answer": "最高水温记录是 36.8℃。",
+            "fact_ids": ["P1.water.temperature.max"], "source_ids": ["W1"],
+            "reference": "高温时要留意底层缺氧。", "next_step": "若复测仍高，先检查底层溶氧，恢复水体循环，再用现有遮阴设施减轻午后温升。",
+        })
+        app.dependency_overrides[get_web_search] = lambda: search
+        app.dependency_overrides[get_model_provider] = lambda: provider
+        follow_up = await self.client.post("/api/v1/agent/chat", headers=headers, json={
+            "pond_id": POND_ID, "question": "针对这种情况，有什么解决方案吗",
+            "recent_turns": [{"question": "最高温是多少", "answer": first.json()["answer"]}],
+        })
+        self.assertEqual(follow_up.status_code, 200)
+        self.assertIn("遮阴", follow_up.json()["answer"])
+        self.assertIn("水温", search.search.call_args.args[0])
+        self.assertNotIn("36.8", search.search.call_args.args[0])
+        self.assertEqual(provider.calls, 1)
+        context = json.loads(provider.user_prompt)
+        self.assertEqual(context["primary_topics"], ["temperature"])
+        self.assertEqual(context["follow_up_topic"], "最高温是多少")
+
+    async def test_ph_action_keeps_both_branches_when_model_only_suggests_monitoring(self) -> None:
+        search = AsyncMock()
+        search.search.return_value = [SearchHit(
+            ChatWebSource(source_id="W1", title="水质指引", url="https://example.edu/pond"),
+            "对虾池 pH 在白天受藻类光合作用影响，也应测总碱度。",
+        )]
+        app.dependency_overrides[get_web_search] = lambda: search
+        app.dependency_overrides[get_model_provider] = lambda: FakeModelProvider({
+            "kind": "pond", "answer": "没有最新读数。", "fact_ids": ["P1.water_availability"],
+            "reference": "藻类光合作用可能推高午后 pH。", "source_ids": ["W1"],
+            "next_step": "建议监测水质。",
+        })
+        reply = await self.client.post("/api/v1/agent/chat", headers={"Authorization": "Bearer user-token"}, json={
+            "pond_id": POND_ID, "question": "pH偏高偏低怎么办？结合 P-01 的数据",
+        })
+        self.assertEqual(reply.status_code, 200)
+        answer = reply.json()["answer"]
+        for point in ("pH偏高", "pH偏低", "暂停施肥", "小样试验", "总碱度"):
+            self.assertIn(point, answer)
+        self.assertEqual(reply.json()["sources"][0]["source_id"], "W1")
+        self.assertNotIn("P-01", search.search.call_args.args[0])
+
+    async def test_chat_replaces_unsupported_feeding_dosage_with_observed_actions(self) -> None:
+        app.dependency_overrides[get_model_provider] = lambda: FakeModelProvider({
+            "kind": "pond", "answer": "今晚建议投喂正常量的五到七成。", "fact_ids": ["P1.water_availability"],
+            "next_step": "下一餐减量 15%。",
+        })
+        reply = await self.client.post("/api/v1/agent/chat", headers={"Authorization": "Bearer user-token"}, json={
+            "pond_id": POND_ID, "question": "虾吃料突然变少，今晚怎么投喂？",
+        })
+        self.assertEqual(reply.status_code, 200)
+        answer = reply.json()["answer"]
+        self.assertNotIn("五到七成", answer)
+        self.assertNotIn("15%", answer)
+        self.assertIn("料台", answer)
+        self.assertIn("缺氧", answer)
 
     async def test_chat_rejects_private_search_query(self) -> None:
         lookup = AsyncMock()

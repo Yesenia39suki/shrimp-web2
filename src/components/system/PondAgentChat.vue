@@ -30,7 +30,7 @@ const metricNames = [
   String.raw`钙\s*[/／]\s*镁硬度|总硬度|硬度|总碱度|碱度|盐度|透明度`,
 ].join('|')
 const metricLabel = String.raw`(?:[A-Z0-9][A-Z0-9_-]*[ \t]+)?(?:${metricNames})(?:[ \t]*(?:值|浓度))?`
-const metricStart = String.raw`${metricLabel}(?=[ \t]*(?:[:：]|(?:为|是|约为?)[ \t]*[+\-−]?\d|$))`
+const metricStart = String.raw`${metricLabel}(?:[ \t]*(?:仍|转)?(?:偏高|偏低|过高|过低|越界))?(?=[ \t]*(?:[:：]|(?:为|是|约为?)[ \t]*[+\-−]?\d|$))`
 const metricHeading = new RegExp(`^${metricStart}`, 'i')
 const metricBreak = new RegExp(String.raw`\r?\n|(?<=[。；;])(?=[ \t]*${metricStart})`, 'i')
 
@@ -42,7 +42,8 @@ function splitReply(answer: string): ReplySection[] {
     for (const line of paragraph.split(metricBreak)) {
       const text = line.trimStart()
       const label =
-        text.match(metricHeading)?.[0] ?? text.match(/^(?:建议|公开参考)(?=[ \t]*[:：]|$)/)?.[0]
+        text.match(metricHeading)?.[0] ??
+        text.match(/^(?:建议|公开参考|先做什么|不同结果怎么处理|怎样恢复投喂|(?:如何|怎样)(?:判断|确认)(?:恢复|措施有效))(?=[ \t]*[:：]|$)/)?.[0]
       if (label) {
         if (section.text || section.heading) sections.push(section)
         section = { heading: label, text: text.slice(label.length).replace(/^[ \t]*[:：]?[ \t]*/, '') }

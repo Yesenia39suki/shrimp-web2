@@ -412,7 +412,7 @@ class SupabaseGateway:
         end_date: date,
         pond_ids: list[UUID],
     ) -> list[WaterDailySnapshot]:
-        """读取服务端确认池塘在固定 7 日窗口内的水质日统计。"""
+        """读取服务端确认池塘在指定日期窗口内的水质日统计。"""
 
         if not pond_ids:
             return []

@@ -10,7 +10,7 @@ from app.schemas.advice import AdviceEvidence, FactId
 
 Question = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=600)]
 Answer = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1500)]
-AnswerSection = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+AnswerSection = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=850)]
 
 
 class ChatTurn(BaseModel):
@@ -33,7 +33,7 @@ class PondChatDraft(BaseModel):
 
     kind: Literal["pond", "knowledge", "unavailable"]
     answer: Answer | None = None
-    fact_ids: list[FactId] = Field(default_factory=list, max_length=6)
+    fact_ids: list[FactId] = Field(default_factory=list, max_length=8)
     reference: AnswerSection | None = None
     source_ids: list[FactId] = Field(default_factory=list, max_length=6)
     next_step: AnswerSection | None = None

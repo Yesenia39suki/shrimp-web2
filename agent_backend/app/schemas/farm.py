@@ -103,7 +103,7 @@ class WaterDailyPoint(BaseModel):
 
 
 class RecentWaterSummary(BaseModel):
-    """后端按固定 7 日窗口整理的水质趋势上下文。"""
+    """后端按指定日期窗口整理的水质趋势上下文。"""
 
     period_start: date
     period_end: date

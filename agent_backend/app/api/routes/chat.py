@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Request
 
-from app.agents.pond_chat import answer_pond_chat
+from app.agents.pond_chat import answer_pond_chat, water_history_days
 from app.api.dependencies import (
     CurrentUser,
     ModelProviderDependency,
@@ -46,6 +46,8 @@ async def chat_with_pond_assistant(
                 access_token=access_token,
                 water_stale_after_hours=settings.water_stale_after_hours,
                 device_heartbeat_stale_after_minutes=settings.device_heartbeat_stale_after_minutes,
+                water_history_days=water_history_days(payload),
+                pond_id=payload.pond_id,
             ), payload.pond_id)
             history = await gateway.list_agent_advice_history(
                 access_token, pond_id=payload.pond_id, limit=3,

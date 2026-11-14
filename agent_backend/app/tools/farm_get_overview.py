@@ -21,6 +21,7 @@ from app.schemas.farm import (
 )
 from app.services.risk_engine import assess_pond_risk
 from app.services.supabase_gateway import SupabaseGateway
+from app.tools.farm_select_pond import PondNotAccessibleError
 
 PondKey = tuple[UUID, UUID]
 MONEY_QUANTUM = Decimal("0.01")
@@ -205,15 +206,22 @@ async def farm_get_overview(
     access_token: str,
     water_stale_after_hours: int = 24,
     device_heartbeat_stale_after_minutes: int = 30,
+    water_history_days: int = 7,
+    pond_id: UUID | None = None,
     now: datetime | None = None,
 ) -> FarmOverviewResponse:
     """组合 RLS 可见数据；不接收 organization_id，也不调用大模型。"""
 
     evaluation_time = _as_utc(now or datetime.now(UTC))
     ponds = await gateway.list_accessible_ponds(access_token)
+    if pond_id is not None:
+        ponds = [pond for pond in ponds if pond.id == pond_id]
+        if not ponds:
+            raise PondNotAccessibleError
     pond_ids = [pond.id for pond in ponds]
     period_end = evaluation_time.date()
     period_start = period_end - timedelta(days=6)
+    water_period_start = period_end - timedelta(days=water_history_days - 1)
 
     (
         latest_rows,
@@ -237,7 +245,7 @@ async def farm_get_overview(
         ),
         gateway.list_accessible_water_daily_stats(
             access_token,
-            period_start,
+            water_period_start,
             period_end,
             pond_ids,
         ),
@@ -293,7 +301,7 @@ async def farm_get_overview(
         latest_water = latest_by_pond.get(key)
         recent_water = _summarize_recent_water(
             water_daily_by_pond.get(key, []),
-            period_start=period_start,
+            period_start=water_period_start,
             period_end=period_end,
         )
         latest_shrimp = shrimp_by_pond.get(key)
