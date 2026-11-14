@@ -7,7 +7,7 @@ import {
   mapRobotStatusRow,
   mapRobotUpdate,
 } from '@/services/mappers/robotMapper'
-import { resolvePondUuid, resolveRobotUuid, throwSupabaseError } from '@/services/supabaseHelpers'
+import { isUuidLike, resolvePondUuid, resolveRobotUuid, throwSupabaseError } from '@/services/supabaseHelpers'
 import type { Robot } from '@/types/business'
 import type { RobotStatus, RobotWorkMode } from '@/types/robot'
 
@@ -153,7 +153,7 @@ export async function deleteRobot(organizationId: string, robotId: string): Prom
     return Promise.resolve(true)
   }
 
-  const robotUuid = await resolveRobotUuid(organizationId, robotId)
+  const robotUuid = isUuidLike(robotId) ? robotId : await resolveRobotUuid(organizationId, robotId)
   const { data, error } = await supabase
     .from('robots')
     .delete()

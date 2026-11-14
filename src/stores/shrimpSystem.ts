@@ -17,6 +17,7 @@ import { waterDailyMetricValue } from '@/services/mappers/waterMapper'
 import { getThresholds, saveThresholds } from '@/services/thresholdService'
 import { getLatestWaterData, getWaterDailyStats } from '@/services/waterDataService'
 import type { PondDailySnapshot } from '@/services/mappers/snapshotMapper'
+import type { Alert } from '@/types/alert'
 import type { BusinessConfig, Pond, Robot, WaterThreshold } from '@/types/business'
 import type { WaterDailyStatsRow, ShrimpDailyStatsRow } from '@/types/database'
 import type { Device } from '@/types/device'
@@ -546,6 +547,7 @@ const defaultPondProfile = initialPondProfiles[0]!
 const defaultOrganizationId = getDefaultOrganizationId()
 const defaultSystemData = getMockSystemData(defaultOrganizationId)
 let supabaseOrganizationLoadSequence = 0
+let robotDeletionRefreshSequence = 0
 
 function isNumberValue(value: number | string): value is number {
   return typeof value === 'number' && Number.isFinite(value)
@@ -909,6 +911,24 @@ function mapDatabaseAlert(alert: {
   } satisfies SystemAlert
 }
 
+function getPondStatus(alerts: Alert[], pondId: string) {
+  const pondAlerts = alerts.filter((alert) => !alert.pondId || alert.pondId === pondId)
+  return pondAlerts.some((alert) => alert.level === 'critical')
+    ? '风险预警'
+    : pondAlerts.length
+      ? '需要关注'
+      : '运行稳定'
+}
+
+function mapActiveAlerts(alerts: Alert[], pondCodeByUuid: Map<string, string>) {
+  return alerts.map((alert) =>
+    mapDatabaseAlert({
+      ...alert,
+      pondId: alert.pondId ? (pondCodeByUuid.get(alert.pondId) ?? alert.pondId) : undefined,
+    }),
+  )
+}
+
 function createRecentTimeRange(days = 30) {
   return {
     startAt: new Date(Date.now() - days * 24 * 60 * 60_000).toISOString(),
@@ -1251,15 +1271,10 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
             shrimpDailyStats[pondCode] = shrimpDaily
             snapshots.push(...pondSnapshots)
 
-            const pondAlerts = activeAlerts.filter(
-              (alert) => !alert.pondId || alert.pondId === pond.id || alert.pondId === pondCode,
-            )
-            const hasCritical = pondAlerts.some((alert) => alert.level === 'critical')
-
             return {
               pondId: pondCode,
               species: pond.shrimp_species,
-              systemStatus: hasCritical ? '风险预警' : pondAlerts.length ? '需要关注' : '运行稳定',
+              systemStatus: getPondStatus(activeAlerts, pond.id),
               waterMetrics: buildSupabaseWaterMetrics(latest, waterDaily),
               shrimpMetrics: buildSupabaseShrimpMetrics({
                 organizationId,
@@ -1319,12 +1334,7 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
         this.devices = devices
         this.snapshots = snapshots
         this.robotStatusById = cloneData(robotStatusById)
-        this.alerts = activeAlerts.map((alert) =>
-          mapDatabaseAlert({
-            ...alert,
-            pondId: alert.pondId ? (pondCodeByUuid.get(alert.pondId) ?? alert.pondId) : undefined,
-          }),
-        )
+        this.alerts = mapActiveAlerts(activeAlerts, pondCodeByUuid)
         this.systemMeta = {
           systemName: '虾群养殖投喂系统',
           logoText: '智慧养殖系统',
@@ -1763,14 +1773,62 @@ export const useShrimpSystemStore = defineStore('shrimpSystem', {
       if (!robot) throw new Error('未找到机器人，请刷新后重试')
 
       if (isSupabaseMode) {
-        await deleteRobot(this.organizationId, robotId)
-        await this.loadSupabaseOrganizationData(this.organizationId)
+        const organizationId = this.organizationId
+        const loadSequence = supabaseOrganizationLoadSequence
+        await deleteRobot(organizationId, robotId)
+        if (this.organizationId !== organizationId || loadSequence !== supabaseOrganizationLoadSequence) {
+          return
+        }
+
+        this.editableRobots = this.editableRobots.filter((item) => item.id !== robotId)
+        delete this.robotStatusById[robotId]
+        delete this.robotStatusById[robot.robot_code]
+        this.devices = this.devices.map((device) =>
+          device.robotId === robotId ? { ...device, robotId: undefined } : device,
+        )
+        this.rebuildRobotRuntimeFromEditable()
+        void this.refreshAfterRobotDeletion(organizationId, loadSequence)
         return
       }
 
       this.editableRobots = this.editableRobots.filter((item) => item.id !== robotId)
       this.rebuildEditableRuntime(this.pondConfig.selectedPondId)
       this.persistEditableRuntime()
+    },
+    async refreshAfterRobotDeletion(organizationId: string, loadSequence: number) {
+      const refreshSequence = ++robotDeletionRefreshSequence
+      // Keep the confirmed deletion visible even if one of the follow-up requests fails.
+      const [devices, alerts] = await Promise.allSettled([
+        getDevices(organizationId),
+        getAlerts(organizationId, { readStatus: 'unread' }),
+      ])
+      if (
+        this.organizationId !== organizationId ||
+        loadSequence !== supabaseOrganizationLoadSequence ||
+        refreshSequence !== robotDeletionRefreshSequence
+      ) {
+        return
+      }
+
+      if (devices.status === 'fulfilled') {
+        this.devices = devices.value
+        this.systemMeta.online =
+          this.devices.some((device) => device.status === 'online') ||
+          this.robots.some((robot) => robot.online)
+      }
+      if (alerts.status === 'fulfilled') {
+        const pondCodeByUuid = new Map(this.ponds.map((pond) => [pond.id, pond.pond_code]))
+        const pondUuidByCode = new Map(this.ponds.map((pond) => [pond.pond_code, pond.id]))
+        const activeAlerts = alerts.value.filter(
+          (alert) => !alert.pondId || pondCodeByUuid.has(alert.pondId),
+        )
+        this.alerts = mapActiveAlerts(activeAlerts, pondCodeByUuid)
+        this.pondProfiles = this.pondProfiles.map((profile) => ({
+          ...profile,
+          systemStatus: getPondStatus(activeAlerts, pondUuidByCode.get(profile.pondId) ?? ''),
+        }))
+        this.systemMeta.currentStatus = this.selectedPondProfile?.systemStatus ?? '暂无数据'
+      }
     },
     async saveEditableThreshold(pondCode: string, threshold: WaterThreshold) {
       if (isSupabaseMode) {

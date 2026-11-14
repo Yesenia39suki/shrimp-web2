@@ -18,6 +18,7 @@ const form = reactive<BusinessConfig>(cloneBusinessConfig(store.businessConfig))
 const robotForm = reactive<Robot>(cloneBusinessConfig(store.businessConfig).robot)
 const saveMessage = ref('')
 const isSaving = ref(false)
+const isDeletingRobot = ref(false)
 const activeSection = ref<'pond' | 'robot' | 'threshold' | 'security'>('pond')
 const selectedPondCode = ref(store.pondConfig.selectedPondId)
 const selectedRobotId = ref(store.editableRobots[0]?.id ?? '')
@@ -138,7 +139,7 @@ watch(
       hasInitializedRobotForm = true
     }
 
-    saveMessage.value = ''
+    if (!isDeletingRobot.value) saveMessage.value = ''
   },
   { immediate: true },
 )
@@ -161,7 +162,7 @@ watch(selectedPondCode, () => {
 
 watch(selectedRobotId, () => {
   syncRobotFormFromSelection()
-  saveMessage.value = ''
+  if (!isDeletingRobot.value) saveMessage.value = ''
 })
 
 function cloneValue<T>(value: T): T {
@@ -362,15 +363,22 @@ async function handleDeleteRobot() {
   const confirmation = `删除机器人「${robot.robot_name}」？关联的运行状态、坐标和指令记录也会删除。`
   if (!window.confirm(confirmation)) return
 
+  const organizationId = authStore.currentOrganization?.id
+  saveMessage.value = ''
+  isDeletingRobot.value = true
   isSaving.value = true
   try {
     await store.deleteEditableRobot(robot.id)
+    if (authStore.currentOrganization?.id !== organizationId) return
     selectedRobotId.value = store.editableRobots[0]?.id ?? ''
     syncRobotFormFromSelection()
     saveMessage.value = '机器人已删除'
   } catch (error) {
-    saveMessage.value = error instanceof Error ? error.message : '机器人删除失败'
+    if (authStore.currentOrganization?.id === organizationId) {
+      saveMessage.value = error instanceof Error ? error.message : '机器人删除失败'
+    }
   } finally {
+    isDeletingRobot.value = false
     isSaving.value = false
   }
 }
@@ -402,12 +410,13 @@ function goNextSection() {
         <button type="button" :disabled="!canSave || isSaving" @click="handleSave">保存</button>
         <button type="button" class="ghost" @click="handleReset">重置</button>
         <span
+          role="status"
           :class="{
             warning: !canSave,
-            success: saveMessage === '配置已保存' || saveMessage === '企业信息已保存',
+            success: saveMessage === '配置已保存' || saveMessage === '企业信息已保存' || saveMessage === '机器人已删除',
           }"
         >
-          {{ saveMessage || permissionText }}
+          {{ isDeletingRobot ? '正在删除机器人…' : saveMessage || permissionText }}
         </span>
       </div>
     </div>
@@ -473,7 +482,7 @@ function goNextSection() {
               :disabled="!canDelete || isSaving || store.loading || !selectedRobot"
               @click="handleDeleteRobot"
             >
-              删除
+              {{ isDeletingRobot ? '删除中…' : '删除' }}
             </button>
           </div>
           <div v-else-if="activeSection === 'threshold'" class="panel-tools">
