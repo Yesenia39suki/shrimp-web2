@@ -353,7 +353,7 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(issues), 1)
         self.assertEqual(issues[0]["title"], "溶解氧偏低")
         self.assertEqual(issues[0]["status"], "有效读数越界")
-        self.assertIn("增氧设备", issues[0]["actions"][1])
+        self.assertIn("备用增氧机", issues[0]["actions"][1])
         self.assertIn("复测", issues[0]["verify"])
 
     async def test_chat_combines_private_facts_with_public_reference(self) -> None:
@@ -457,7 +457,7 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_chat_replaces_unsupported_feeding_dosage_with_observed_actions(self) -> None:
         app.dependency_overrides[get_model_provider] = lambda: FakeModelProvider({
-            "kind": "pond", "answer": "今晚建议投喂正常量的五到七成。", "fact_ids": ["P1.water_availability"],
+            "kind": "pond", "answer": "今晚建议投喂正常量的五到七成。只投平时一半。", "fact_ids": ["P1.water_availability"],
             "next_step": "下一餐减量 15%。",
         })
         reply = await self.client.post("/api/v1/agent/chat", headers={"Authorization": "Bearer user-token"}, json={
@@ -466,6 +466,7 @@ class AgentApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply.status_code, 200)
         answer = reply.json()["answer"]
         self.assertNotIn("五到七成", answer)
+        self.assertNotIn("一半", answer)
         self.assertNotIn("15%", answer)
         self.assertIn("料台", answer)
         self.assertIn("缺氧", answer)

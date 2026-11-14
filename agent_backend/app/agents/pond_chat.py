@@ -92,11 +92,12 @@ COMBINED_DATA_QUESTION = re.compile(r"平均|日均|最新|当前|现在|阈值|
 UNSUPPORTED_DOSAGE = re.compile(
     r"(?:投加|添加|泼洒|用量|剂量|每亩|换水|投喂|喂料|加料|减料|饲料|下一餐|这餐|一餐|减量|加量|正常量)"
     r"[^。！？；\n]{0,35}(?:[\d０-９]+(?:[.．]\d+)?\s*(?:公斤|千克|毫克|毫升|kg|mg|ml|克|斤|升|[%％‰]|成)"
-    r"|[一二两三四五六七八九十半]+(?:至|到)?[一二两三四五六七八九十]*成|百分之|千分之|减半|对半)", re.I,
+    r"|[一二两三四五六七八九十半]+(?:至|到)?[一二两三四五六七八九十]*成|百分之|千分之|一半|减半|对半|半量)"
+    r"|(?:先|仅|只|可|按)?(?:投|喂)[^。！？；\n]{0,12}(?:一半|半量|[一二两三四五六七八九十]+成)", re.I,
 )
 UNSUPPORTED_PRODUCT_ACTION = re.compile(
     r"(?:建议|可以?|考虑|应|需|立即|用|使用|投加|施用|泼洒|添加|选用|全池|补充)"
-    r"[^。！？；\n]{0,15}(?:化学增氧剂|颗粒(?:状)?增氧剂|杀藻剂|酸碱调节剂|生石灰|降氨氮产品|乳酸菌|过氧化钙)"
+    r"[^。！？；\n]{0,15}(?:化学增氧剂|颗粒(?:状)?增氧剂|杀藻剂|酸碱调节剂|生石灰|降氨氮产品|有益微生物|硝化细菌|乳酸菌|过氧化钙)"
 )
 NEGATIVE_ACTION = re.compile(r"不要|不宜|不使用|不投加|不投药|避免|禁止|先别")
 HISTORICAL_EXTREME = {
@@ -547,25 +548,31 @@ async def answer_pond_chat(
             parts.append(reference.answer)
             sources = reference.sources
             search_note = None
-    if sources and search_note:
+    if action and not sources:
+        guides = [hit for hit in hits if hit.source.source_id.startswith("R")]
+        if guides:
+            parts.append("公开参考\n" + "\n".join(hit.summary for hit in guides))
+            sources = [hit.source for hit in guides]
+            search_note = "已附上相关技术资料。" if search_note else None
+    elif sources and search_note:
         search_note = "本次实时搜索没有可用结果，已附上相关技术资料。"
     if requested_search and not sources and search_note is None:
         search_note = "本次未找到能支持回答的公开资料。"
 
     next_step = _without_dosage(draft.next_step or "", action=action)
     next_step_references = [item.statement for item in evidence]
-    if action and next_step and not _supported_numbers(next_step, next_step_references):
-        next_step = "".join(
-            sentence for sentence in ANSWER_SEGMENT.findall(next_step)
-            if _supported_numbers(sentence, next_step_references)
-        ).strip()
     if (next_step and (evidence or action) and not PRECISE_FEED_PATTERN.search(next_step)
             and not UNSUPPORTED_DOSAGE.search(next_step)):
         qualitative_action = action and bool(re.search(
             r"暂停|暂缓|停止|清理|恢复(?:增氧|循环|供电)|调整|改用|遮阴|补水|校准|保持|增加|修复|分次|试喂|小样", next_step,
         ))
         both_ph_directions = "ph" in topics and bool(re.search(r"偏高.*偏低|偏低.*偏高|高低", question))
-        covers_request = not action or (qualitative_action and (not both_ph_directions or ("偏高" in next_step and "偏低" in next_step)))
+        low_oxygen = "dissolved_oxygen" in topics and bool(re.search(r"偏低|低氧|不足|不够|缺氧", question))
+        covers_request = not action or (
+            qualitative_action
+            and (not both_ph_directions or ("偏高" in next_step and "偏低" in next_step))
+            and (not low_oxygen or ("增氧" in next_step and "复测" in next_step))
+        )
         if covers_request and _supported_numbers(next_step, next_step_references):
             parts.append(f"建议\n{next_step}")
         else:
